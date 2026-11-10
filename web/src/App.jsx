@@ -69,6 +69,8 @@ function StatusBanner({ status, message }) {
       <section className="card bad">
         <h2>Could not reach the server</h2>
         <p>{message}</p>
+        {/* The page checks the server only once when it opens, so give people an obvious way to check again. */}
+        <button onClick={() => window.location.reload()}>Try again</button>
       </section>
     );
   return null;
