@@ -40,3 +40,9 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 ## Later
 - Test with real videos and a swappable vision model (free options)
 - Capacitor Android wrap (only after Check-in 2)
+- Cloud vision API for damage (team decision pending). Gemini pricing checked 10 Nov 2026 on aistudio.google.com/docs/pricing:
+  - Cheapest confirmed: Gemini 3.1 Flash-Lite, $0.25 per 1M input tokens, $1.50 per 1M output (batch half price). 2.5 Flash-Lite ($0.10 / $0.40) not verified word for word.
+  - An image costs 258 tokens per 768x768 tile. Our ESTIMATE (not measured): 12 photos ~13k input + ~1.5k output, about $0.006 per inspection.
+  - Paid tier: link billing and prepay at least $5. Free tier exists, but Google uses free-tier inputs to improve its products, so it is fine for demo photos only. The docs do not say whether the free tier needs a card.
+  - Code default GEMINI_MODEL is gemini-2.5-flash, which Google retires on 1 Dec 2026; change it before switching Gemini on.
+  - Free alternative still open: open-source CarDD damage models (check licences first).
