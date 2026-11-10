@@ -12,6 +12,7 @@ Endpoints:
 import os, sys
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "engine"))
 import pipeline
@@ -42,3 +43,8 @@ def case(case_id: str):
 @app.get("/api/evaluate")
 def evaluate():
     return pipeline.evaluate()
+
+
+# Serve the website from the same server: one address, one deployment, no CORS trouble.
+# Must come LAST so it does not swallow the /api routes above.
+app.mount("/", StaticFiles(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend"), html=True), name="site")

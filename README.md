@@ -16,4 +16,12 @@ cd engine && python score_end_to_end.py
 Current result: 418/420 decisions correct (99.5%); human reviewers 71.7%. Damage type and severity exact match 98.5%.
 Caveat: tested on written descriptions, not real video.
 
+## Run the website
+```
+pip install -r backend/requirements.txt
+uvicorn backend.app:app --reload     # from the repo root, with data/ filled in
+# open http://localhost:8000
+```
+The page is plain HTML + JavaScript (no build step) and is served by the same FastAPI app.
+
 See STATUS.md for what is done and what is left.

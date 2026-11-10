@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motor Self-Inspection AI</title>
+<style>
+  /* WHY plain CSS variables: one place to change colours; dark mode only redefines them. */
+  :root{--bg:#f6f7f9;--card:#fff;--text:#1b2430;--muted:#657084;--line:#e3e7ee;--accent:#2b5cff;
+        --ok:#157347;--okbg:#e4f5ec;--warn:#9a6700;--warnbg:#fff4d6;--bad:#b3261e;--badbg:#fde8e6;--info:#1f5fbf;--infobg:#e6efff}
+  @media (prefers-color-scheme:dark){:root{--bg:#12161c;--card:#1a2029;--text:#e8edf4;--muted:#93a0b4;--line:#2b3441;
+        --accent:#7c9cff;--ok:#6fd49b;--okbg:#14301f;--warn:#f0c15a;--warnbg:#3a2f12;--bad:#ff8a80;--badbg:#3b1b19;--info:#8db4ff;--infobg:#15284a}}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  header{padding:20px 16px 8px;max-width:980px;margin:auto} h1{font-size:22px;margin:0} header p{margin:4px 0 0;color:var(--muted)}
+  main{max-width:980px;margin:auto;padding:8px 16px 48px;display:grid;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  select,button,input{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+  select{flex:1;min-width:220px} button{cursor:pointer;background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{background:transparent;color:var(--accent)}
+  .badge{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:14px}
+  .APPROVE{background:var(--okbg);color:var(--ok)} .APPROVE_WITH_EXCLUSIONS{background:var(--infobg);color:var(--info)}
+  .RESHOOT{background:var(--warnbg);color:var(--warn)} .REJECT{background:var(--badbg);color:var(--bad)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kv{background:var(--bg);border-radius:8px;padding:8px 10px} .kv b{display:block;font-size:12px;color:var(--muted);font-weight:500}
+  table{width:100%;border-collapse:collapse;font-size:14px} th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500;font-size:12px} .msg{border-left:4px solid var(--accent);padding:8px 12px;background:var(--bg);border-radius:4px}
+  .muted{color:var(--muted)} .frame{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px} code{font-size:13px}
+  .tag{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-right:6px;display:inline-block;margin-bottom:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Motor Self-Inspection AI</h1>
+  <p>PolicyNest · PS-03 · synthetic data. Pick a case: the system reads the evidence, applies the SOP rules and explains its decision.</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1 · Choose a case</h2>
+    <div class="row">
+      <select id="filter" aria-label="Filter by expected decision"><option value="">All 420 cases</option></select>
+      <select id="picker" aria-label="Case"></select>
+      <button id="run">Inspect</button>
+    </div>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2>2 · Decision</h2>
+    <div class="row"><span id="decision" class="badge"></span><span id="verdict" class="muted"></span></div>
+    <p id="route" class="muted"></p>
+    <div><b>Why:</b> <span id="reasons"></span></div>
+    <h2 style="margin-top:16px">Message to the customer</h2><div id="message" class="msg"></div>
+    <h2 style="margin-top:16px">Damage register</h2><div id="damage"></div>
+    <h2 style="margin-top:16px">Evidence used</h2><div id="evidence" class="grid"></div>
+    <h2 style="margin-top:16px">What the camera saw (per shot)</h2><div id="frames"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Accuracy on all 420 gold cases</h2>
+    <div class="row"><button class="ghost" id="evalBtn">Run evaluation</button><span id="evalOut" class="muted"></span></div>
+    <div id="evalDetail"></div>
+  </section>
+</main>
+
+<script>
+/* HOW THIS PAGE WORKS
+   1. On load it asks the API for the list of cases and fills the drop-downs.
+   2. "Inspect" calls /api/cases/<id>; the answer is a JSON object and we only paint it onto the page.
+   3. "Run evaluation" calls /api/evaluate (all 420 cases) and shows the totals.
+   No decision logic lives here, so the browser can never disagree with the engine. */
+const $ = id => document.getElementById(id);
+const API = "";   // same address as the page; set to "http://localhost:8000" if the page is opened from another server
+const pretty = s => s.replace(/_/g, " ").toLowerCase();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let cases = [];
+
+async function get(path){ const r = await fetch(API + path); if(!r.ok) throw new Error(path + " -> " + r.status); return r.json(); }
+
+function fillPicker(){
+  const f = $("filter").value;
+  const list = cases.filter(c => !f || c.gold_decision === f);
+  $("picker").innerHTML = list.map(c => `<option value="${c.case_id}">${c.case_id}</option>`).join("");
+}
+
+async function load(){
+  cases = await get("/api/cases");
+  const kinds = [...new Set(cases.map(c => c.gold_decision))].sort();
+  $("filter").innerHTML = `<option value="">All ${cases.length} cases</option>` +
+    kinds.map(k => `<option value="${k}">Expected: ${pretty(k)}</option>`).join("");
+  fillPicker();
+}
+
+async function inspect(){
+  const id = $("picker").value; if(!id) return;
+  const r = await get("/api/cases/" + id);
+  $("result").hidden = false;
+  $("decision").textContent = pretty(r.decision); $("decision").className = "badge " + r.decision;
+  $("verdict").textContent = r.correct ? "matches the expert answer" : "differs from the expert answer (" + pretty(r.gold_decision) + ")";
+  $("route").textContent = r.route === "FRAUD_DESK" ? "Routed to the fraud desk. The customer is only told a surveyor will contact them."
+                         : r.route === "REVIEWER_CONFIRM" ? "A human reviewer confirms this before the customer is told." : "";
+  $("reasons").innerHTML = r.reasons.map(x => `<span class="tag">${esc(x)}</span>`).join("");
+  $("message").textContent = r.customer_message;
+  $("damage").innerHTML = r.damage_register.length
+    ? `<table><tr><th>Panel</th><th>Type</th><th>Severity</th><th>Seen in shot</th><th>At second</th></tr>` +
+      r.damage_register.map(d => `<tr><td>${pretty(d.panel)}</td><td>${pretty(d.kind)}</td><td>${d.severity}</td><td>${d.shot ? pretty(d.shot) : "-"}</td><td>${d.second ?? "-"}</td></tr>`).join("") + `</table>`
+    : `<span class="muted">No damage found.</span>`;
+  const e = r.evidence;
+  const kv = (k, v) => `<div class="kv"><b>${k}</b>${esc(v)}</div>`;
+  $("evidence").innerHTML = kv("Plate declared", e.plate_declared) + kv("Plate read", e.plate_read || "(unreadable)") +
+    kv("Chassis declared", e.chassis_declared) + kv("Chassis read", e.chassis_read || "(unreadable)") +
+    kv("Lighting", e.lighting) + kv("Blur", e.blur) + kv("Screen-recording score", e.moire) +
+    kv("Hours since filmed", e.hours_since_capture) + kv("Missing shots", e.missing_shots.length ? e.missing_shots.join(", ") : "none");
+  $("frames").innerHTML = r.frames.map(f => `<div class="frame"><code>${f.shot}</code> ${esc(f.description)}</div>`).join("");
+  $("result").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+async function evaluate(){
+  $("evalOut").textContent = "Running 420 cases...";
+  const e = await get("/api/evaluate");
+  $("evalOut").textContent = `${e.correct} of ${e.total} correct (${(e.accuracy*100).toFixed(1)}%). Human reviewers on the same cases: ${(e.reviewer_accuracy*100).toFixed(1)}%.`;
+  $("evalDetail").innerHTML = `<table><tr><th>Expert decision</th><th>Correct</th><th>Total</th></tr>` +
+    Object.entries(e.per_decision).map(([k,v]) => `<tr><td>${pretty(k)}</td><td>${v.correct}</td><td>${v.total}</td></tr>`).join("") + `</table>` +
+    (e.misses.length ? `<p class="muted">Cases it got wrong: ${e.misses.join(", ")}</p>` : "");
+}
+
+$("filter").onchange = fillPicker; $("run").onclick = inspect; $("evalBtn").onclick = evaluate;
+load().catch(err => { document.body.insertAdjacentHTML("afterbegin", `<p style="padding:16px;color:#b3261e">Could not reach the API: ${esc(err.message)}</p>`); });
+</script>
+</body>
+</html>
