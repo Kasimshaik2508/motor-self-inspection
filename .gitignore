@@ -8,3 +8,4 @@ data/*
 __pycache__/
 node_modules/
 run_*.csv
+.venv/

@@ -1,4 +1,7 @@
-fastapi
-uvicorn[standard]
-pandas
-openpyxl
+# Pinned to the versions tested locally on 10 Nov 2026 (Python 3.12).
+# WHY pinned: the host installs these fresh on every deploy; pinning means it gets exactly what we tested.
+fastapi==0.162.2
+starlette==1.10.0
+uvicorn[standard]==0.54.0
+pandas==3.1.1
+openpyxl==3.1.5

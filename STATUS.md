@@ -12,15 +12,15 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Scoring scripts on the 420 gold cases | reproducible | |
 | Plan review and tech-stack decision | React + Vite, FastAPI | |
 | Pipeline module `engine/pipeline.py` (analyze one case, evaluate all 420) | tested, 418/420 | |
-| FastAPI app `backend/app.py` | written, NOT yet run with FastAPI (needs `pip install -r backend/requirements.txt`) | |
-| Website `frontend/index.html` (case picker, decision, damage register, evaluation) | tested in a browser against the same endpoints (no console errors) | |
+| FastAPI app `backend/app.py` | run locally 10 Nov: all endpoints work, /api/evaluate = 418/420 in ~0.3 s; no code changes needed | |
+| Website `frontend/index.html` (case picker, decision, damage register, evaluation) | tested 10 Nov in a browser against the real FastAPI server: inspect + evaluation work, no console errors | |
+| Requirements pinned to tested versions; `.venv/` ignored; Python 3.12 | done | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
 |---|---|---|
-| Run and check the FastAPI backend locally | | Written, untested |
 | Reviewer console page (confirm / override a decision) | | Not started |
-| Public deployed URL that opens without login | | Not started |
+| Public deployed URL that opens without login | | Waiting on decision: how the deployed app gets the data |
 | One-page note | | Not started |
 | Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
 
