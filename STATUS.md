@@ -11,11 +11,13 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Frame reader (text to damage list) | 98.5% exact type+severity | |
 | Scoring scripts on the 420 gold cases | reproducible | |
 | Plan review and tech-stack decision | React + Vite, FastAPI | |
+| Pipeline module `engine/pipeline.py` (analyze one case, evaluate all 420) | tested, 418/420 | |
+| FastAPI app `backend/app.py` | written, NOT yet run (needs `pip install -r backend/requirements.txt`) | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
 |---|---|---|
-| FastAPI backend (decide + evaluate endpoints) | | Not started |
+| Run and check the FastAPI backend locally | | Written, untested |
 | React + Vite frontend (case picker, decision, damage register, customer message) | | Not started |
 | Public deployed URL that opens without login | | Not started |
 | One-page note | | Not started |
