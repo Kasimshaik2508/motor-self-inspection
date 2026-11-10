@@ -10,7 +10,9 @@ FLOW
        - second failed re-shoot  -> surveyor visit (SOP 4, 8)
        - plate and chassis disagree -> a person decides (SOP 13)
        - any damage the model is unsure about -> a reviewer confirms (low-confidence gate)
-       - no vision model / model failed -> a reviewer looks at the photos; we NEVER auto-approve blind
+       - no cloud vision model -> use the PHONE's own results (car detected, plate / chassis OCR, dark / blur).
+         Quality and identity problems are decided at once; damage is "not assessed by AI", so anything that
+         would be approved goes to a reviewer to check damage. We NEVER auto-approve without a damage check.
   6. The record is kept for the reviewer console.
 
 STORAGE: in memory only (the newest 50 inspections). A restart - or the free host going to sleep - empties it.
@@ -47,6 +49,24 @@ def _plain_reshoot(reasons):
         asks.append("we could not read the chassis number: retake that photo close up, with the last six characters clear")
     return "We could not complete the check yet. Please fix all of these and send again: " + \
         "; ".join(f"({i + 1}) {a}" for i, a in enumerate(asks)) + "."
+
+
+DARK_BELOW, BLURRY_BELOW = 0.25, 40     # same first-guess thresholds as web/src/photo.js (uncalibrated)
+
+
+def phone_results(phone_shots):
+    """Per-shot results from the phone's free on-device checks, in the same shape vision.py returns."""
+    out = []
+    for s in phone_shots:
+        quality = "DARK" if (s.get("brightness") or 1) < DARK_BELOW else \
+            "BLURRY" if (s.get("sharpness") is not None and s["sharpness"] < BLURRY_BELOW) else "OK"
+        car = s.get("car_detected")
+        out.append({"shot": s["shot"], "answered": True,
+                    "shows_expected_shot": car is not False,      # outside shot with no car in it = wrong photo
+                    "quality": quality, "screen_photo": False,
+                    "plate_text": s.get("plate_read") or "", "chassis_last6": (s.get("chassis_read") or "")[-6:],
+                    "damage": []})
+    return out
 
 
 def build_findings(declared_plate, declared_chassis, phone_shots, vision_results):
@@ -87,14 +107,14 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None):
            "photos": {s["shot"]: s["image_b64"] for s in phone_shots},
            "phone_checks": [{k: s.get(k) for k in ("shot", "brightness", "sharpness")} for s in phone_shots],
            "review": None}
+    damage_checked = True
     try:
         results, vehicle, model = vision.analyze([(s["shot"], s["image_b64"]) for s in phone_shots])
         rec.update(vision_ok=True, model=model, vehicle=vehicle, per_shot=results)
     except vision.VisionUnavailable as e:
-        rec.update(vision_ok=False, model=None, vehicle={}, per_shot=[], vision_error=str(e))
-        rec.update(status="NEEDS_REVIEW", hold_reasons=["VISION_UNAVAILABLE"], decision=None,
-                   customer_message="Thank you, we have your photos. A reviewer will check them and get back to you shortly.")
-        return _save(rec)
+        results, damage_checked = phone_results(phone_shots), False
+        rec.update(vision_ok=False, model="on-phone checks (car detector + OCR); damage not assessed by AI",
+                   vehicle={}, per_shot=results, vision_error=str(e))
 
     f = build_findings(declared_plate, declared_chassis, phone_shots, results)
     d = decide(f)
@@ -111,6 +131,8 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None):
     chassis_rel = chassis_relation(declared_chassis, f.chassis_read)
     if {plate_rel, chassis_rel} == {"MATCH", "DIFFERENT"}:         # SOP 13: identity checks disagree -> a person
         hold.append("IDENTITY_CONFLICT")
+    if not damage_checked and d.outcome in ("APPROVE", "APPROVE_WITH_EXCLUSIONS"):
+        hold.append("DAMAGE_NOT_ASSESSED_BY_AI")                   # photos passed every check; a person checks damage
     unsure = [x for r in results for x in r["damage"] if x["confidence"] < LOW_CONFIDENCE]
     if unsure and d.outcome in ("APPROVE", "APPROVE_WITH_EXCLUSIONS"):
         hold.append("LOW_CONFIDENCE_DAMAGE")
@@ -118,6 +140,9 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None):
         hold.append(d.route)
     if any(h in hold for h in ("IDENTITY_CONFLICT", "LOW_CONFIDENCE_DAMAGE", "REVIEWER_CONFIRM")) and d.route != "FRAUD_DESK":
         message = "Thank you, we have your photos. A reviewer is confirming the result and will get back to you shortly."
+    elif "DAMAGE_NOT_ASSESSED_BY_AI" in hold:
+        message = ("All 12 photos passed our checks and your number plate and chassis number match. "
+                   "A reviewer is now checking the photos for existing damage and will confirm shortly.")
     rec.update(findings=asdict(f), decision=decision, hold_reasons=hold,
                identity={"plate": plate_rel, "chassis": chassis_rel},
                status="NEEDS_REVIEW" if hold and "SECOND_FAILED_ATTEMPT" not in hold else "AI_DECIDED",

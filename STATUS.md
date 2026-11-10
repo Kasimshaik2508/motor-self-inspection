@@ -16,6 +16,7 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Website rebuilt in React + Vite (`web/`): case picker, decision, damage register, evaluation, data-not-loaded / server-down banners | tested 10 Nov against the real API on a separate address: inspect, filter, evaluation (418/420), phone width, no-data and server-down screens. "Waking up the server" message NOT tested (needs a sleeping Render server). Old plain-HTML page removed | |
 | Requirements pinned to tested versions; `.venv/` ignored; Python 3.12 | done | |
 | **Customer capture app** (10 Nov, after team feedback): guided 12-shot photos, on-phone dark/blur check, upload, vision layer (Gemini / OpenRouter, swappable), SOP decision, plain re-shoot message, one retake then surveyor | tested locally WITHOUT a model (goes to reviewer, as designed) + 11 scripted model answers through every route. Real model accuracy on car photos NOT tested: needs a key and test photos | |
+| **Free on-phone camera app** (10 Nov, per Nitin): live camera, car detection + auto-capture (COCO-SSD), plate + chassis OCR (Tesseract.js), decision from phone checks, damage -> reviewer | tested: OCR reads 3 synthetic plate formats + a synthetic VIN correctly; detector loads and runs; camera fallback works; 6 phone-only routes pass. NOT tested: live camera and car detection on a real car (needs a phone test) | |
 | **Reviewer console** (confirm / override with reason, photos + AI findings) | tested locally: override needs a reason, customer sees the reviewer's result. No login; memory-only storage | |
 | Low-confidence gate (<0.6), identity-conflict route, re-shoot round counting | in the photo app; scripted tests pass | |
 | **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Pushes to main redeploy automatically (seen 10 Nov) | |
@@ -30,7 +31,8 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Item | Owner | Status |
 |---|---|---|
 | Verified / not-verified checklist with evidence | | Not started |
-| Vision model key on Render + test with 10-30 real photo sets | Kasim / team | Not started |
+| Test the live app on a phone with a real car (camera, auto-capture, plate/chassis OCR) | Kasim / team | Not started |
+| Damage detection (later: free/cheap model, decided by the team) | | Later |
 | Calibrate on-phone dark/blur thresholds on real photos | | Not started |
 | Plain re-shoot message for the 420-case evaluation page (photo app already has it) | | Not started |
 | Confirm severity ladder with problem owner | | Not started |

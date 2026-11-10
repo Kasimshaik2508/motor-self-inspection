@@ -41,3 +41,27 @@ run("9 one-char plate slip, chassis ok", {"FRONT": shot("FRONT", plate="KA01AB1Z
 run("10 photo of a screen", {"REAR": shot("REAR", screen=True)})
 run("11 wrong angle for left side", {"LEFT_SIDE": shot("LEFT_SIDE", ok=False)})
 print("scratch severity clamp (model said 3):", vision._clean_severity("SCRATCH", 3), "| crack said 1:", vision._clean_severity("CRACK", 1))
+
+# ---- no cloud model: decisions from the PHONE's own checks (car detector + OCR) ----
+print("\n--- phone-only (no cloud model) ---")
+def phone_run(name, change=None, skip=()):
+    def unavailable(shots): raise vision.VisionUnavailable("no model")
+    vision.analyze = unavailable
+    shots = []
+    for c in vision.SHOT_CODES:
+        if c in skip: continue
+        s = {"shot": c, "image_b64": "x", "brightness": 0.5, "sharpness": 200, "captured_at_ms": time.time() * 1000,
+             "car_detected": True if c not in ("ODOMETER", "CHASSIS_NUMBER", "ENGINE_BAY") else None,
+             "plate_read": "KA 01 AB 1234" if c in ("FRONT", "REAR") else "", "chassis_read": "123456" if c == "CHASSIS_NUMBER" else ""}
+        s.update((change or {}).get(c, {}))
+        shots.append(s)
+    r = L.run("KA 01 AB 1234", "123456", shots)
+    c = L.customer_view(r)
+    print(f"{name:34s} AI={str((r['decision'] or {}).get('outcome')):24s} status={r['status']:13s} hold={r['hold_reasons']}\n{'':34s} customer sees outcome={c['outcome']} | {c['message'][:110]}")
+
+phone_run("P1 all 12 good, ids match")
+phone_run("P2 engine bay skipped", skip=("ENGINE_BAY",))
+phone_run("P3 no car in left-side photo", {"LEFT_SIDE": {"car_detected": False}})
+phone_run("P4 plate unreadable (both)", {"FRONT": {"plate_read": ""}, "REAR": {"plate_read": ""}})
+phone_run("P5 chassis different", {"CHASSIS_NUMBER": {"chassis_read": "999999"}})
+phone_run("P6 all photos dark", {c: {"brightness": 0.1} for c in vision.SHOT_CODES})

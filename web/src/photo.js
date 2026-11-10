@@ -26,8 +26,9 @@ function loadImage(file) {
 
 function measure(img) {
   const long = 256;
-  const k = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.max(8, Math.round(img.naturalWidth * k)), h = Math.max(8, Math.round(img.naturalHeight * k));
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  const k = Math.min(1, long / Math.max(iw, ih));
+  const w = Math.max(8, Math.round(iw * k)), h = Math.max(8, Math.round(ih * k));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
@@ -48,20 +49,29 @@ function measure(img) {
   return { brightness: +(sum / (w * h) / 255).toFixed(3), sharpness: +(m2 / n - mean * mean).toFixed(1) };
 }
 
+/** Draws any image/video frame into a canvas whose long edge is at most 1280 px. */
+export function toCanvas(source) {
+  const iw = source.videoWidth || source.naturalWidth || source.width;
+  const ih = source.videoHeight || source.naturalHeight || source.height;
+  const k = Math.min(1, 1280 / Math.max(iw, ih));
+  const c = document.createElement("canvas");
+  c.width = Math.round(iw * k); c.height = Math.round(ih * k);
+  c.getContext("2d").drawImage(source, 0, 0, c.width, c.height);
+  return c;
+}
+
+/** The checks for one photo, from a canvas (camera frame or uploaded file). */
+export function processCanvas(c) {
+  const dataUrl = c.toDataURL("image/jpeg", 0.82);
+  const { brightness, sharpness } = measure(c);
+  const warnings = [];
+  if (brightness < DARK_BELOW) warnings.push("This photo looks too dark. Retake it in daylight or under a bright light.");
+  if (sharpness < BLURRY_BELOW) warnings.push("This photo looks blurry. Hold the phone with both hands and keep still.");
+  return { canvas: c, dataUrl, b64: dataUrl.split(",")[1], brightness, sharpness, capturedAt: Date.now(), warnings };
+}
+
+/** Fallback when there is no live camera (laptop, or camera permission refused): pick or take a photo file. */
 export async function processPhoto(file) {
   const { img, url } = await loadImage(file);
-  try {
-    const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement("canvas");
-    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    const dataUrl = c.toDataURL("image/jpeg", 0.82);
-    const { brightness, sharpness } = measure(img);
-    const warnings = [];
-    if (brightness < DARK_BELOW) warnings.push("This photo looks too dark. Retake it in daylight or under a bright light.");
-    if (sharpness < BLURRY_BELOW) warnings.push("This photo looks blurry. Hold the phone with both hands and keep still.");
-    return { dataUrl, b64: dataUrl.split(",")[1], brightness, sharpness, capturedAt: Date.now(), warnings };
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  try { return processCanvas(toCanvas(img)); } finally { URL.revokeObjectURL(url); }
 }

@@ -84,6 +84,9 @@ class Shot(BaseModel):
     brightness: Optional[float] = None     # measured on the phone, 0 (black) to 1 (white)
     sharpness: Optional[float] = None      # measured on the phone; higher = sharper
     captured_at_ms: Optional[float] = None
+    car_detected: Optional[bool] = None    # on-phone car detector (outside shots only)
+    plate_read: str = ""                   # on-phone OCR (FRONT / REAR)
+    chassis_read: str = ""                 # on-phone OCR (CHASSIS_NUMBER), last 6 characters
 
 
 class InspectionIn(BaseModel):

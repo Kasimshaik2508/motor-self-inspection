@@ -4,9 +4,12 @@ Team 3 entry, Masters' Union Applied AI Challenge. A customer films their car (R
 APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage register. All data is synthetic.
 
 ## What the app does (three tabs)
-1. **Inspect my car** (customer): guided capture of the 12 SOP shots with the phone camera. Each photo is checked
-   ON THE PHONE (too dark / blurry -> retake now), then sent to the backend. A vision model reports shot, quality,
-   plate, chassis, screen-photo and damage per photo; the SOP engine decides; the customer gets one plain message.
+1. **Inspect my car** (customer): live phone camera, guided through the 12 SOP shots. FREE and ON THE PHONE:
+   a car detector (COCO-SSD, TensorFlow.js) says "car detected" and auto-captures when the car fills the frame;
+   OCR (Tesseract.js) reads the number plate (front/rear) and chassis number and compares them with what was entered;
+   dark / blurry photos get "retake" at once. The backend's SOP engine then decides: missing / dark / blurry photos,
+   unreadable plate or chassis -> one plain re-shoot message; plate or chassis mismatch -> surveyor (fraud desk);
+   everything fine -> a reviewer checks damage (no damage AI yet, so we never auto-approve).
 2. **Reviewer**: every inspection with photos and the AI's findings; confirm or override (overrides need a reason).
    A person is required for fraud suspicions, severe damage, plate/chassis disagreement, low-confidence damage,
    a second failed retake (surveyor), and when no vision model is available (never auto-approve blind).
@@ -19,6 +22,8 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
   (second failed retake -> surveyor, identity conflict / low confidence -> reviewer), keeps the record (memory only).
 - `engine/decision_engine.py` - the SOP v2.4 rules: fraud, then quality, then severe damage, then minor damage, then clean.
 - `engine/frame_reader.py` - reads the challenge's written frame descriptions for the 420-case evaluation.
+- `web/src/Camera.jsx` + `web/src/detect.js` - live camera, on-phone car detection, auto-capture, plate / chassis OCR.
+  No API key, no paid calls; model files download once from public CDNs. Accuracy on real cars NOT yet measured.
 - `web/src/photo.js` - on-phone photo checks (resize, brightness, sharpness). Thresholds are first guesses, uncalibrated.
 - `tests/test_live_routes.py` - scripted model answers through every SOP route (routing only, not model accuracy).
 
@@ -26,7 +31,7 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
 - `VISION_PROVIDER` = `gemini` and `GEMINI_API_KEY` = your key (aistudio.google.com). Optional `GEMINI_MODEL`.
   Gemini's free tier may use uploaded content to improve Google's products: test photos only, never real customers.
 - or `VISION_PROVIDER` = `openrouter`, `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`.
-- Without these, photo inspections still work but every one goes to the reviewer.
+- Without these (the current setup), the app uses the phone's own checks above and a reviewer checks damage.
 - **Untested:** the accuracy of any model on real car photos. Measure it on the team's own test photos.
 
 ## Run the test on the 420 gold cases
