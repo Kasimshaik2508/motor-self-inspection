@@ -51,7 +51,7 @@ to the API's full address (see `web/.env.example`).
 
 ## Deployment (Render free tier)
 **Live:** https://motor-self-inspection-web.onrender.com (API: https://motor-self-inspection-api.onrender.com/api/health)
-- After pushing changes, open each service in Render and click **Manual Deploy -> Deploy latest commit** (auto-deploy is off).
+- Render redeploys both services automatically a minute or two after a push to `main` (checked 10 Nov).
 - Settings live in `render.yaml`: two free services.
   - `motor-self-inspection-api` (Python 3.12.7): build `pip install -r backend/requirements.txt`, start `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`.
   - `motor-self-inspection-web` (static site from `web/`): build `npm ci && npm run build`, publish `dist`, setting `VITE_API_URL` = the API's address.

@@ -18,7 +18,7 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | **Customer capture app** (10 Nov, after team feedback): guided 12-shot photos, on-phone dark/blur check, upload, vision layer (Gemini / OpenRouter, swappable), SOP decision, plain re-shoot message, one retake then surveyor | tested locally WITHOUT a model (goes to reviewer, as designed) + 11 scripted model answers through every route. Real model accuracy on car photos NOT tested: needs a key and test photos | |
 | **Reviewer console** (confirm / override with reason, photos + AI findings) | tested locally: override needs a reason, customer sees the reviewer's result. No login; memory-only storage | |
 | Low-confidence gate (<0.6), identity-conflict route, re-shoot round counting | in the photo app; scripted tests pass | |
-| **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Deployed from the public repo URL, so pushes do NOT auto-deploy: use Manual Deploy in Render | |
+| **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Pushes to main redeploy automatically (seen 10 Nov) | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
