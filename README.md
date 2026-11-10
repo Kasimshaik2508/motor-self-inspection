@@ -3,9 +3,31 @@
 Team 3 entry, Masters' Union Applied AI Challenge. A customer films their car (React + Vite app, Android via Capacitor); the system returns one of
 APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage register. All data is synthetic.
 
+## What the app does (three tabs)
+1. **Inspect my car** (customer): guided capture of the 12 SOP shots with the phone camera. Each photo is checked
+   ON THE PHONE (too dark / blurry -> retake now), then sent to the backend. A vision model reports shot, quality,
+   plate, chassis, screen-photo and damage per photo; the SOP engine decides; the customer gets one plain message.
+2. **Reviewer**: every inspection with photos and the AI's findings; confirm or override (overrides need a reason).
+   A person is required for fraud suspicions, severe damage, plate/chassis disagreement, low-confidence damage,
+   a second failed retake (surveyor), and when no vision model is available (never auto-approve blind).
+3. **Evaluation (420 cases)**: the challenge's gold cases, read from written frame descriptions, scored 418/420.
+
 ## How it works
-1. `engine/frame_reader.py` reads what is in the video (today: written frame descriptions; later: a vision model) and lists damage.
-2. `engine/decision_engine.py` applies the PolicyNest SOP v2.4 as plain rules: fraud, then quality, then severe damage, then minor damage, then clean.
+- `engine/vision.py` - the eyes: sends all photos in ONE request to a vision model (swappable: `VISION_PROVIDER` =
+  `gemini` | `openrouter` | `none`), then cleans the answer (SOP panel/type lists, severity ranges).
+- `engine/live_inspection.py` - turns the model's answers into the engine's `Findings`, decides, applies SOP routing
+  (second failed retake -> surveyor, identity conflict / low confidence -> reviewer), keeps the record (memory only).
+- `engine/decision_engine.py` - the SOP v2.4 rules: fraud, then quality, then severe damage, then minor damage, then clean.
+- `engine/frame_reader.py` - reads the challenge's written frame descriptions for the 420-case evaluation.
+- `web/src/photo.js` - on-phone photo checks (resize, brightness, sharpness). Thresholds are first guesses, uncalibrated.
+- `tests/test_live_routes.py` - scripted model answers through every SOP route (routing only, not model accuracy).
+
+## Vision model settings (Render -> motor-self-inspection-api -> Environment)
+- `VISION_PROVIDER` = `gemini` and `GEMINI_API_KEY` = your key (aistudio.google.com). Optional `GEMINI_MODEL`.
+  Gemini's free tier may use uploaded content to improve Google's products: test photos only, never real customers.
+- or `VISION_PROVIDER` = `openrouter`, `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`.
+- Without these, photo inspections still work but every one goes to the reviewer.
+- **Untested:** the accuracy of any model on real car photos. Measure it on the team's own test photos.
 
 ## Run the test on the 420 gold cases
 ```

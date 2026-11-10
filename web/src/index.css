@@ -23,3 +23,28 @@ table{width:100%;border-collapse:collapse;font-size:14px;display:block;overflow-
 th{color:var(--muted);font-weight:500;font-size:12px} .msg{border-left:4px solid var(--accent);padding:8px 12px;background:var(--bg);border-radius:4px}
 .muted{color:var(--muted)} .frame{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px} code{font-size:13px}
 .tag{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-right:6px;display:inline-block;margin-bottom:4px}
+/* --- capture app, reviewer console, tabs --- */
+.tabs{display:flex;gap:4px;margin-top:12px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs a{padding:8px 12px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.tabs a.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+h3{margin:12px 0 4px;font-size:18px;text-transform:capitalize} .small{font-size:13px}
+.form{display:grid;gap:12px;margin:12px 0} .form label{display:grid;gap:4px;font-size:14px}
+.form input,.form select,.form textarea{width:100%} label.check{display:flex;gap:8px;align-items:center}
+label.check input{width:auto}
+.button{display:inline-block;font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.button.ghost{background:transparent;color:var(--accent)} .button.disabled{opacity:.5;pointer-events:none}
+button.link{background:none;border:none;color:var(--accent);padding:4px 0} .row.spaced{justify-content:space-between;margin-top:12px}
+.preview{width:100%;max-height:60vh;object-fit:contain;border-radius:8px;background:#000;margin:8px 0}
+.warn-text{color:var(--warn)} .ok-text{color:var(--ok)}
+.strip{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px} .dot{width:18px;height:18px;padding:0;border-radius:50%;background:var(--line);border:2px solid transparent}
+.dot.done{background:var(--ok)} .dot.current{border-color:var(--accent)} .dot.redo{background:var(--warn)}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0 12px}
+.thumb{display:grid;gap:4px;padding:4px;background:var(--bg);color:var(--text);border:1px solid var(--line);font-size:12px;text-transform:capitalize}
+.thumb img,.thumb .empty{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;display:grid;place-items:center;background:var(--line);color:var(--muted)}
+.badge.PENDING{background:var(--line);color:var(--muted)} .badge.sm{font-size:12px;padding:2px 8px}
+.pill{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--line)} .pill.NEEDS_REVIEW{background:var(--warnbg);color:var(--warn)}
+.pill.REVIEWED{background:var(--okbg);color:var(--ok)} tr.clickable{cursor:pointer} tr.clickable:hover td{background:var(--bg)}
+.shotgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.shot{margin:0;background:var(--bg);border-radius:8px;overflow:hidden} .shot img{width:100%;aspect-ratio:4/3;object-fit:cover}
+.shot figcaption{padding:8px;display:grid;gap:4px;font-size:14px;text-transform:none}
+textarea{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}

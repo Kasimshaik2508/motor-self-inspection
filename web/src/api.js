@@ -9,10 +9,14 @@
 */
 export const API = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-export async function get(path) {
+export const get = (path) => request(path);
+export const post = (path, body) =>
+  request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+async function request(path, options) {
   let r;
   try {
-    r = await fetch(API + path);
+    r = await fetch(API + path, options);
   } catch {
     // fetch only throws when no answer came back at all (server down, wrong address, no internet).
     throw new Error("The server did not answer. It may be down or the address may be wrong. Try again in a minute.");

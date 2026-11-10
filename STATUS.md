@@ -15,22 +15,24 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | FastAPI app `backend/app.py` | run locally 10 Nov: all endpoints work, /api/evaluate = 418/420 in ~0.3 s; no code changes needed | |
 | Website rebuilt in React + Vite (`web/`): case picker, decision, damage register, evaluation, data-not-loaded / server-down banners | tested 10 Nov against the real API on a separate address: inspect, filter, evaluation (418/420), phone width, no-data and server-down screens. "Waking up the server" message NOT tested (needs a sleeping Render server). Old plain-HTML page removed | |
 | Requirements pinned to tested versions; `.venv/` ignored; Python 3.12 | done | |
+| **Customer capture app** (10 Nov, after team feedback): guided 12-shot photos, on-phone dark/blur check, upload, vision layer (Gemini / OpenRouter, swappable), SOP decision, plain re-shoot message, one retake then surveyor | tested locally WITHOUT a model (goes to reviewer, as designed) + 11 scripted model answers through every route. Real model accuracy on car photos NOT tested: needs a key and test photos | |
+| **Reviewer console** (confirm / override with reason, photos + AI findings) | tested locally: override needs a reason, customer sees the reviewer's result. No login; memory-only storage | |
+| Low-confidence gate (<0.6), identity-conflict route, re-shoot round counting | in the photo app; scripted tests pass | |
 | **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Deployed from the public repo URL, so pushes do NOT auto-deploy: use Manual Deploy in Render | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
 |---|---|---|
-| Reviewer console page (confirm / override a decision) | | Not started |
 | One-page note | | Not started |
 | Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
 
 ## To do before the auction (16 and 18 Nov)
 | Item | Owner | Status |
 |---|---|---|
-| Re-shoot round counting (surveyor after 2nd failure) | | Not started |
-| Low-confidence gate and verified / not-verified checklist | | Not started |
-| Re-shoot message in plain words listing every problem (today it shows codes like TOO_DARK) | | Not started |
-| Reviewer console | | Not started |
+| Verified / not-verified checklist with evidence | | Not started |
+| Vision model key on Render + test with 10-30 real photo sets | Kasim / team | Not started |
+| Calibrate on-phone dark/blur thresholds on real photos | | Not started |
+| Plain re-shoot message for the 420-case evaluation page (photo app already has it) | | Not started |
 | Confirm severity ladder with problem owner | | Not started |
 
 ## Later
