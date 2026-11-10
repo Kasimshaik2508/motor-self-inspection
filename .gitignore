@@ -1,0 +1,10 @@
+data/*
+!data/README.md
+*.xlsx
+*.docx
+*.pdf
+*.mp4
+.env
+__pycache__/
+node_modules/
+run_*.csv
