@@ -15,12 +15,12 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | FastAPI app `backend/app.py` | run locally 10 Nov: all endpoints work, /api/evaluate = 418/420 in ~0.3 s; no code changes needed | |
 | Website rebuilt in React + Vite (`web/`): case picker, decision, damage register, evaluation, data-not-loaded / server-down banners | tested 10 Nov against the real API on a separate address: inspect, filter, evaluation (418/420), phone width, no-data and server-down screens. "Waking up the server" message NOT tested (needs a sleeping Render server). Old plain-HTML page removed | |
 | Requirements pinned to tested versions; `.venv/` ignored; Python 3.12 | done | |
+| **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Deployed from the public repo URL, so pushes do NOT auto-deploy: use Manual Deploy in Render | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
 |---|---|---|
 | Reviewer console page (confirm / override a decision) | | Not started |
-| Public deployed URL that opens without login | | Config ready: `render.yaml` with two services (API + static website). Data is now committed in the public repo (decided 10 Nov), so no token is needed. Waiting on Kasim: Render sign-in. Render build itself NOT yet tested |
 | One-page note | | Not started |
 | Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
 
