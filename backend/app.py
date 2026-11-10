@@ -12,7 +12,6 @@ Endpoints:
 import os, sys
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -31,7 +30,7 @@ if DATA_OK:
 print(f"[startup] {DATA_MESSAGE}", flush=True)   # safe: the message never contains the token
 
 app = FastAPI(title="Motor Self-Inspection AI")
-# CORS lets the React site (a different address while developing) call this API from the browser.
+# CORS lets the React site (its own address on Render, or https://localhost inside the Capacitor app) call this API.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
 
@@ -66,6 +65,7 @@ def evaluate():
     return pipeline.evaluate()
 
 
-# Serve the website from the same server: one address, one deployment, no CORS trouble.
-# Must come LAST so it does not swallow the /api routes above.
-app.mount("/", StaticFiles(directory=os.path.join(HERE, "..", "frontend"), html=True), name="site")
+@app.get("/")
+def root():
+    # The website is a separate React app (web/), deployed as its own static site; this server is only the API.
+    return {"service": "Motor Self-Inspection AI API", "health": "/api/health", "website": "see web/ (React + Vite)"}

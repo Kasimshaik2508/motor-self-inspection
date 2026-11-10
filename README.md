@@ -1,6 +1,6 @@
 # Motor Self-Inspection AI (PS-03)
 
-Team 3 entry, Masters' Union Applied AI Challenge. A customer films their car; the system returns one of
+Team 3 entry, Masters' Union Applied AI Challenge. A customer films their car (React + Vite app, Android via Capacitor); the system returns one of
 APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage register. All data is synthetic.
 
 ## How it works
@@ -16,16 +16,22 @@ cd engine && python score_end_to_end.py
 Current result: 418/420 decisions correct (99.5%); human reviewers 71.7%. Damage type and severity exact match 98.5%.
 Caveat: tested on written descriptions, not real video.
 
-## Run the website
+## Run it locally (two terminals)
 ```
-pip install -r backend/requirements.txt
-uvicorn backend.app:app --reload     # from the repo root, with data/ filled in
-# open http://localhost:8000
+# 1) the API (from the repo root, with data/ filled in)
+python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+.venv/bin/uvicorn backend.app:app --reload            # http://localhost:8000/api/health
+
+# 2) the website: React + Vite (later wrapped into an Android app with Capacitor)
+cd web && npm install && npm run dev                   # open the address Vite prints (usually http://localhost:5173)
 ```
-The page is plain HTML + JavaScript (no build step) and is served by the same FastAPI app.
+While developing, Vite forwards `/api` calls to port 8000. For a deployed or Android build, set `VITE_API_URL`
+to the API's full address (see `web/.env.example`).
 
 ## Deployment (Render free tier)
-- Settings live in `render.yaml` (build: `pip install -r backend/requirements.txt`; start: `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`; Python 3.12.7).
+- Settings live in `render.yaml`: two free services.
+  - `motor-self-inspection-api` (Python 3.12.7): build `pip install -r backend/requirements.txt`, start `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`.
+  - `motor-self-inspection-web` (static site from `web/`): build `npm ci && npm run build`, publish `dist`, setting `VITE_API_URL` = the API's address.
 - The challenge data is NOT in this repo. On startup `backend/fetch_data.py` downloads the two workbooks from the private repo
   `motor-self-inspection-data` using `DATA_REPO_TOKEN` (a read-only token set only in Render's dashboard). If that fails,
   the site still opens and shows a "Data not loaded" message with the reason.

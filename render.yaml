@@ -1,8 +1,10 @@
-# Render "Blueprint": tells Render how to build and run this app (free tier, no login needed to view).
-# WHY a file instead of clicking settings: the settings are written down, reviewed and versioned with the code.
+# Render "Blueprint": tells Render how to build and run this project. Two free services:
+#   1. motor-self-inspection-api  - Python/FastAPI: the decision engine. Sleeps after ~15 min idle (free tier).
+#   2. motor-self-inspection-web  - the React + Vite website, served as static files. Static sites do not sleep.
+# WHY two: the Android app (Capacitor) will also be "website on the phone + API on a server", so we deploy the same way.
 services:
   - type: web
-    name: motor-self-inspection
+    name: motor-self-inspection-api
     runtime: python
     plan: free
     region: singapore                 # closest Render region to India
@@ -18,3 +20,15 @@ services:
         value: main
       - key: DATA_REPO_TOKEN
         sync: false                   # secret: Render asks you to paste it in the dashboard; never in this file
+
+  - type: web
+    name: motor-self-inspection-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_URL
+        sync: false                   # the API's https://...onrender.com address; paste it after the API's first deploy
