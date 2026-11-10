@@ -20,7 +20,7 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Item | Owner | Status |
 |---|---|---|
 | Reviewer console page (confirm / override a decision) | | Not started |
-| Public deployed URL that opens without login | | Waiting on decision: how the deployed app gets the data |
+| Public deployed URL that opens without login | | Config ready (`render.yaml`, `backend/fetch_data.py`); fail-safe tested locally (no token, wrong token). Real download from the private repo NOT yet tested: waiting on Kasim to create the data repo, token and Render account |
 | One-page note | | Not started |
 | Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
 

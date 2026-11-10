@@ -28,6 +28,7 @@
   th{color:var(--muted);font-weight:500;font-size:12px} .msg{border-left:4px solid var(--accent);padding:8px 12px;background:var(--bg);border-radius:4px}
   .muted{color:var(--muted)} .frame{padding:6px 0;border-bottom:1px solid var(--line);font-size:14px} code{font-size:13px}
   .tag{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 7px;margin-right:6px;display:inline-block;margin-bottom:4px}
+  button:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -84,6 +85,15 @@ function fillPicker(){
 }
 
 async function load(){
+  // Ask the server first whether the data loaded; if not, say so plainly instead of showing a broken page.
+  const h = await get("/api/health");
+  if(!h.data_loaded){
+    document.querySelector("main").insertAdjacentHTML("afterbegin",
+      `<section class="card" style="border-color:#b3261e"><h2 style="color:#e5736b">Data not loaded</h2>` +
+      `<p>${esc(h.data_message)}</p><p class="muted">The site is running, but it has no cases to show yet.</p></section>`);
+    ["run", "evalBtn"].forEach(id => $(id).disabled = true);
+    return;
+  }
   cases = await get("/api/cases");
   const kinds = [...new Set(cases.map(c => c.gold_decision))].sort();
   $("filter").innerHTML = `<option value="">All ${cases.length} cases</option>` +
