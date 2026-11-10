@@ -10,7 +10,6 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
 ## Run the test on the 420 gold cases
 ```
 pip install pandas openpyxl
-# put the two workbooks in data/ (see data/README.md)
 cd engine && python score_end_to_end.py
 ```
 Current result: 418/420 decisions correct (99.5%); human reviewers 71.7%. Damage type and severity exact match 98.5%.
@@ -18,7 +17,7 @@ Caveat: tested on written descriptions, not real video.
 
 ## Run it locally (two terminals)
 ```
-# 1) the API (from the repo root, with data/ filled in)
+# 1) the API (from the repo root)
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 .venv/bin/uvicorn backend.app:app --reload            # http://localhost:8000/api/health
 
@@ -32,11 +31,10 @@ to the API's full address (see `web/.env.example`).
 - Settings live in `render.yaml`: two free services.
   - `motor-self-inspection-api` (Python 3.12.7): build `pip install -r backend/requirements.txt`, start `uvicorn backend.app:app --host 0.0.0.0 --port $PORT`.
   - `motor-self-inspection-web` (static site from `web/`): build `npm ci && npm run build`, publish `dist`, setting `VITE_API_URL` = the API's address.
-- The challenge data is NOT in this repo. On startup `backend/fetch_data.py` downloads the two workbooks from the private repo
-  `motor-self-inspection-data` using `DATA_REPO_TOKEN` (a read-only token set only in Render's dashboard). If that fails,
-  the site still opens and shows a "Data not loaded" message with the reason.
-- **Note for the team:** the live site is public, so anyone can see each case's content (frame descriptions, expected decision)
-  through `/api/cases`. Keeping the files out of GitHub does not hide that. We accepted this for the demo.
+- The two challenge workbooks (synthetic data) are committed in `data/`, so the deployed API reads them directly; no secrets
+  or tokens are needed. If a file is missing or unreadable, the site still opens and shows a "Data not loaded" message.
+- **Note for the team:** the repo and the live site are both public, so anyone can download the data and see each case's
+  content. The challenge pack states all data is synthetic; we decided on 10 Nov to keep everything in one public repo.
 - The free tier sleeps after ~15 minutes idle; the first visit then takes 30-60 s. Open the site a minute before any demo.
 
 See STATUS.md for what is done and what is left.

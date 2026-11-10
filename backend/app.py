@@ -14,20 +14,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "engine"))
-from fetch_data import ensure_data
 
-# FAIL SAFE: get the data (download it if needed), then load the engine. If either step fails the server
-# still starts; the API answers 503 with a plain reason and the page shows a "data not loaded" banner.
-DATA_OK, DATA_MESSAGE = ensure_data()
+# FAIL SAFE: load the engine, which reads the two workbooks in data/. If that fails (file missing, corrupt,
+# sheet renamed) the server still starts; the API answers 503 with a plain reason and the page shows a
+# "data not loaded" banner instead of crashing.
+DATA_OK, DATA_MESSAGE = True, "Data files loaded."
 pipeline = None
-if DATA_OK:
-    try:
-        import pipeline                      # reads the spreadsheets as soon as it is imported
-    except Exception as e:                   # e.g. a corrupt file or a renamed sheet
-        DATA_OK, DATA_MESSAGE = False, f"Data not loaded: the data files could not be read ({type(e).__name__})."
-print(f"[startup] {DATA_MESSAGE}", flush=True)   # safe: the message never contains the token
+try:
+    import pipeline                          # reads the spreadsheets as soon as it is imported
+except FileNotFoundError as e:
+    DATA_OK, DATA_MESSAGE = False, f"Data not loaded: missing file {os.path.basename(str(e.filename))} in data/."
+except Exception as e:
+    DATA_OK, DATA_MESSAGE = False, f"Data not loaded: the data files could not be read ({type(e).__name__})."
+print(f"[startup] {DATA_MESSAGE}", flush=True)
 
 app = FastAPI(title="Motor Self-Inspection AI")
 # CORS lets the React site (its own address on Render, or https://localhost inside the Capacitor app) call this API.

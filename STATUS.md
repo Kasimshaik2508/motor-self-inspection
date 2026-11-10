@@ -20,7 +20,7 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Item | Owner | Status |
 |---|---|---|
 | Reviewer console page (confirm / override a decision) | | Not started |
-| Public deployed URL that opens without login | | Config ready: `render.yaml` with two services (API + static website), `backend/fetch_data.py`; fail-safe tested locally (no token, wrong token). Private repo `motor-self-inspection-data` created 10 Nov with the two workbooks; real download tested locally (files identical, 418/420). Waiting on Kasim: read-only token + Render sign-in and deploy. Render build itself NOT yet tested |
+| Public deployed URL that opens without login | | Config ready: `render.yaml` with two services (API + static website). Data is now committed in the public repo (decided 10 Nov), so no token is needed. Waiting on Kasim: Render sign-in. Render build itself NOT yet tested |
 | One-page note | | Not started |
 | Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
 

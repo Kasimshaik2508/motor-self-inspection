@@ -1,6 +1,8 @@
-data/*
-!data/README.md
+# The two challenge workbooks (synthetic data) ARE committed in data/ so the deployed app has them.
+# Everything else that is a document or video stays out.
 *.xlsx
+!data/PS-03_inspection_cases.xlsx
+!data/PS-03_evaluation_set.xlsx
 *.docx
 *.pdf
 *.mp4

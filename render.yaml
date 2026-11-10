@@ -14,12 +14,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7                 # the version we tested with
-      - key: DATA_REPO
-        value: Kasimshaik2508/motor-self-inspection-data
-      - key: DATA_REPO_BRANCH
-        value: main
-      - key: DATA_REPO_TOKEN
-        sync: false                   # secret: Render asks you to paste it in the dashboard; never in this file
 
   - type: web
     name: motor-self-inspection-web
