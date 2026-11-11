@@ -4,9 +4,11 @@ Team 3 entry, Masters' Union Applied AI Challenge. A customer films their car (R
 APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage register. All data is synthetic.
 
 ## What the app does (three tabs)
-1. **Inspect my car** (customer): live phone camera, guided through the 12 SOP shots. FREE and ON THE PHONE:
+1. **Inspect my car** (customer): the customer enters only their **policy number**; the plate and chassis number come
+   from the insurer's policy record (`engine/policies.py`, synthetic demo policies), so nobody can type numbers that
+   match their own photos. Then the live phone camera guides them through the 12 SOP shots. FREE and ON THE PHONE:
    a car detector (COCO-SSD, TensorFlow.js) says "car detected" and auto-captures when the car fills the frame;
-   OCR (Tesseract.js) reads the number plate (front/rear) and chassis number and compares them with what was entered;
+   OCR (Tesseract.js) reads the number plate (front/rear) and chassis number, which the server compares with the policy;
    dark / blurry photos get "retake" at once. The backend's SOP engine then decides: missing / dark / blurry photos,
    unreadable plate or chassis -> one plain re-shoot message; plate or chassis mismatch -> surveyor (fraud desk);
    everything fine -> a reviewer checks damage (no damage AI yet, so we never auto-approve).
@@ -15,6 +17,20 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
    a second failed retake (surveyor), and when no vision model is available (never auto-approve blind).
 3. **Evaluation (420 cases)**: the challenge's gold cases, read from written frame descriptions, scored 418/420.
 
+## Demo without a car
+Pick a demo policy on the start screen and press **Fill with demo photos**: 12 sample photos of a blue Tata Nexon
+(free Wikimedia Commons photos, edited: synthetic plate KA 01 AB 1234, made-up chassis label) go through exactly the
+same checks. Credits and every edit: `web/public/demo-photos/CREDITS.md`. Tested 11 Nov (locally):
+
+| Try | Policy | What happens |
+|---|---|---|
+| Right car | PN-DEMO-001 | plate and chassis match; photos pass; a reviewer checks damage |
+| Wrong chassis label (tick "fraud demo") | PN-DEMO-001 | plate matches, chassis does not: fraud desk; customer only hears "a surveyor will contact you" |
+| Wrong car for the policy | PN-DEMO-002 | plate and chassis differ: fraud desk |
+
+This proves the flow and the rules, NOT real-world accuracy: the photos are not all of one car, and the plate is a clean
+synthetic one. The odometer photo (a night dashboard) still gets a "too dark" warning; the dark threshold is uncalibrated.
+
 ## How it works
 - `engine/vision.py` - the eyes: sends all photos in ONE request to a vision model (swappable: `VISION_PROVIDER` =
   `gemini` | `openrouter` | `none`), then cleans the answer (SOP panel/type lists, severity ranges).
@@ -22,7 +38,11 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
   (second failed retake -> surveyor, identity conflict / low confidence -> reviewer), keeps the record (memory only).
 - `engine/decision_engine.py` - the SOP v2.4 rules: fraud, then quality, then severe damage, then minor damage, then clean.
 - `engine/frame_reader.py` - reads the challenge's written frame descriptions for the 420-case evaluation.
+- `engine/policies.py` - the synthetic demo policy table (policy number -> car, plate, chassis). The chassis number
+  never goes to the customer's screen.
 - `web/src/Camera.jsx` + `web/src/detect.js` - live camera, on-phone car detection, auto-capture, plate / chassis OCR.
+  Plate reading: find the bright plate-shaped box (no model), read only its letters six ways and take the majority,
+  fix look-alike slips by position (O/0, I/T/1, S/5, B/8) and accept only real Indian state codes.
   No API key, no paid calls; model files download once from public CDNs. Accuracy on real cars NOT yet measured.
 - `web/src/photo.js` - on-phone photo checks (resize, brightness, sharpness). Thresholds are first guesses, uncalibrated.
 - `tests/test_live_routes.py` - scripted model answers through every SOP route (routing only, not model accuracy).

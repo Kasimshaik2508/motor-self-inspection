@@ -9,6 +9,8 @@ Endpoints:
   GET /api/cases/{id}        -> full analysis of one case (decision, reasons, damage register, message, evidence)
   GET /api/evaluate          -> accuracy over all 420
   Live photo inspections (the customer app and the reviewer console):
+  GET  /api/policies                    -> the synthetic DEMO policies (policy number, car, plate; never the chassis)
+  GET  /api/policies/{policy_no}        -> one policy: which car the customer must photograph
   POST /api/inspections                 -> customer sends photos; returns what the CUSTOMER may see
   GET  /api/inspections/{id}            -> customer checks the result again (e.g. after a reviewer decided)
   GET  /api/review/inspections          -> reviewer: list of inspections
@@ -38,7 +40,7 @@ except FileNotFoundError as e:
 except Exception as e:
     DATA_OK, DATA_MESSAGE = False, f"Data not loaded: the data files could not be read ({type(e).__name__})."
 print(f"[startup] {DATA_MESSAGE}", flush=True)
-import live_inspection, vision                  # the photo app: does not need the workbooks
+import live_inspection, vision, policies        # the photo app: does not need the workbooks
 
 app = FastAPI(title="Motor Self-Inspection AI")
 # CORS lets the React site (its own address on Render, or https://localhost inside the Capacitor app) call this API.
@@ -90,8 +92,9 @@ class Shot(BaseModel):
 
 
 class InspectionIn(BaseModel):
-    declared_plate: str
-    declared_chassis_last6: str
+    policy_no: Optional[str] = None        # preferred: plate and chassis come from OUR policy record
+    declared_plate: str = ""               # older way: typed by the customer (still accepted, used by tests)
+    declared_chassis_last6: str = ""
     shots: List[Shot]
     retake_of: Optional[str] = None
 
@@ -108,8 +111,32 @@ def shots():
     return [{"code": c, "what": w} for c, w in vision.SHOTS]
 
 
+@app.get("/api/policies")
+def policy_list():
+    return policies.demo_list()
+
+
+@app.get("/api/policies/{policy_no}")
+def policy_one(policy_no: str):
+    try:
+        return policies.customer_view(policies.lookup(policy_no))
+    except KeyError:
+        raise HTTPException(404, "We could not find that policy number. Check it and try again.")
+
+
 @app.post("/api/inspections")
 def create_inspection(body: InspectionIn):
+    policy = None
+    if body.policy_no:
+        try:
+            policy = policies.lookup(body.policy_no)
+        except KeyError:
+            raise HTTPException(404, "We could not find that policy number. Check it and try again.")
+        plate, chassis6 = policy["plate"], policy["chassis"][-6:]
+    else:
+        plate, chassis6 = body.declared_plate.strip(), body.declared_chassis_last6.strip()
+        if not plate or len(chassis6) < 6:
+            raise HTTPException(400, "send a policy number (or a plate and the last 6 characters of the chassis number)")
     if not body.shots:
         raise HTTPException(400, "no photos were sent")
     seen = set()
@@ -126,8 +153,8 @@ def create_inspection(body: InspectionIn):
             live_inspection.get(body.retake_of)
         except KeyError:
             raise HTTPException(404, "the inspection you are retaking was not found (the server may have restarted)")
-    rec = live_inspection.run(body.declared_plate.strip(), body.declared_chassis_last6.strip(),
-                              [s.model_dump() for s in body.shots], body.retake_of)
+    rec = live_inspection.run(plate, chassis6, [s.model_dump() for s in body.shots], body.retake_of,
+                              policy=policies.customer_view(policy) if policy else None)
     return live_inspection.customer_view(rec)
 
 

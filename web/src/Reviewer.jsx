@@ -35,10 +35,10 @@ export default function Reviewer() {
       {list && !list.length && <p className="muted">No inspections yet. Do one in "Inspect my car" first.</p>}
       {list && list.length > 0 && (
         <table>
-          <thead><tr><th>ID</th><th>When</th><th>Plate</th><th>Status</th><th>AI decision</th><th>Why a person</th><th>Final</th></tr></thead>
+          <thead><tr><th>ID</th><th>When</th><th>Policy · plate</th><th>Status</th><th>AI decision</th><th>Why a person</th><th>Final</th></tr></thead>
           <tbody>{list.map((r) => (
             <tr key={r.id} className="clickable" onClick={() => setOpenId(r.id)}>
-              <td><code>{r.id}</code></td><td>{time(r.created_at)}</td><td>{r.plate}</td>
+              <td><code>{r.id}</code></td><td>{time(r.created_at)}</td><td>{r.policy_no ? r.policy_no + " · " : ""}{r.plate}</td>
               <td><span className={"pill " + r.status}>{pretty(r.status)}</span></td>
               <td>{r.ai_outcome ? <span className={"badge sm " + r.ai_outcome}>{pretty(r.ai_outcome)}</span> : "-"}</td>
               <td>{r.hold_reasons.map(pretty).join(", ") || "-"}</td>
@@ -92,7 +92,8 @@ function Detail({ id, onBack }) {
           </>
         ) : <p className="warn-text">No AI decision: {r.vision_error}</p>}
         {r.hold_reasons?.length > 0 && <p><b>Why a person is needed:</b> {r.hold_reasons.map(pretty).join(", ")}</p>}
-        <p className="muted small">Model: {r.model || "none"} · attempt {r.attempt} · declared plate {r.declared.plate}, chassis {r.declared.chassis_last6}
+        {r.policy && <p><b>Policy {r.policy.policy_no}</b>: {r.policy.make_model}, {r.policy.colour} · {r.policy.owner}</p>}
+        <p className="muted small">Model: {r.model || "none"} · attempt {r.attempt} · plate on file {r.declared.plate}, chassis on file …{r.declared.chassis_last6}
           {r.identity && <> · plate {pretty(r.identity.plate)}, chassis {pretty(r.identity.chassis)}</>}
           {r.vehicle?.make && <> · seen: {r.vehicle.colour} {r.vehicle.make} {r.vehicle.model}</>}</p>
         <h2 className="sub">Message the customer sees</h2>

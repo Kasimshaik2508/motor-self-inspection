@@ -1,7 +1,10 @@
 /*
   Capture.jsx - the CUSTOMER app: photograph the car, check each photo on the phone, send, get a decision.
 
-  Steps:  details -> 12 guided shots -> review -> sending -> result (-> retake once, if asked)
+  Steps:  policy -> 12 guided shots -> review -> sending -> result (-> retake once, if asked)
+  The customer enters only the POLICY NUMBER. The plate and chassis number come from the insurer's policy record
+  (engine/policies.py, synthetic demo data), so a cheater cannot type numbers that match their photos.
+  Demo helper: "Fill with demo photos" loads the 12 sample photos (web/public/demo-photos) and runs the same checks.
   Each shot: live camera (Camera.jsx) with on-phone car detection and auto-capture; then, still on the phone:
   brightness/blur check, "is there a car in this photo?", and OCR of the plate (front/rear) or chassis number.
   If the live camera is unavailable (laptop, permission refused) the customer can pick or take a photo file instead.
@@ -15,15 +18,17 @@ import { compareIds, detectCar, readChassis, readPlate } from "./detect";
 
 // shots of the outside of the car (a car should be visible); the rest are close-ups
 const CAR_SHOTS = ["FRONT", "FRONT_LEFT_45", "LEFT_SIDE", "REAR_LEFT_45", "REAR", "REAR_RIGHT_45", "RIGHT_SIDE", "FRONT_RIGHT_45", "ROOF_AND_GLASS"];
-const ID_LABEL = { MATCH: "matches what you entered ✓", ONE_CHAR_SLIP: "one character differs (probably a reading slip)", DIFFERENT: "does NOT match what you entered", UNREADABLE: "could not be read" };
+const ID_LABEL = { MATCH: "matches your policy ✓", ONE_CHAR_SLIP: "one character differs (probably a reading slip)", DIFFERENT: "does NOT match your policy", UNREADABLE: "could not be read", SENT: "we will check it against your policy" };
 
 const pretty = (s) => String(s).replace(/_45/, " corner").replace(/_/g, " ").toLowerCase();
 
 export default function Capture() {
   const [shots, setShots] = useState([]);
   const [step, setStep] = useState("details");
-  const [plate, setPlate] = useState("");
-  const [chassis, setChassis] = useState("");
+  const [policyNo, setPolicyNo] = useState("");
+  const [policy, setPolicy] = useState(null);       // the car on file: model, colour, plate (never the chassis)
+  const [demoPolicies, setDemoPolicies] = useState([]);
+  const [wrongChassis, setWrongChassis] = useState(false);
   const [consent, setConsent] = useState(false);
   const [photos, setPhotos] = useState({});        // shot code -> processed photo
   const [idx, setIdx] = useState(0);
@@ -36,7 +41,36 @@ export default function Capture() {
   const [analysing, setAnalysing] = useState("");
   const onNoCamera = useCallback(() => setCamFailed(true), []);
 
-  useEffect(() => { get("/api/shots").then(setShots).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    get("/api/shots").then(setShots).catch((e) => setError(e.message));
+    get("/api/policies").then(setDemoPolicies).catch(() => {});
+  }, []);
+  const plate = policy?.plate || "";
+
+  async function findPolicy(no) {
+    setBusy(true); setError(""); setPolicy(null);
+    try { setPolicy(await get("/api/policies/" + encodeURIComponent(no.trim()))); setPolicyNo(no.trim().toUpperCase()); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  /** Demo helper: loads the 12 sample photos and runs exactly the same on-phone checks as a real photo. */
+  async function fillDemo() {
+    setBusy(true); setError("");
+    try {
+      const done = {};
+      for (const [i, s] of shots.entries()) {
+        setAnalysing(`Demo photo ${i + 1} of ${shots.length}: ${pretty(s.code)}…`);
+        const name = s.code === "CHASSIS_NUMBER" && wrongChassis ? "CHASSIS_NUMBER_wrong_car" : s.code;
+        const res = await fetch(`${import.meta.env.BASE_URL}demo-photos/${name}.jpg`);
+        if (!res.ok) throw new Error(`Demo photo ${name} could not be loaded.`);
+        done[s.code] = await analyse(s.code, { ...(await processPhoto(await res.blob())), via: "demo" });
+        setPhotos((p) => ({ ...p, [s.code]: done[s.code] }));
+      }
+      setStep("review");
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); setAnalysing(""); }
+  }
 
   const shot = shots[idx];
   const photo = shot && photos[shot.code];
@@ -60,7 +94,8 @@ export default function Capture() {
       if (code === "CHASSIS_NUMBER") {
         setAnalysing("Reading the chassis number…");
         out.chassisRead = await readChassis(out.canvas);
-        out.chassisCheck = compareIds(chassis, out.chassisRead.last6);
+        // the phone does not know the chassis number on file (kept on the server); the server compares it
+        out.chassisCheck = out.chassisRead.last6 ? "SENT" : "UNREADABLE";
         if (out.chassisCheck === "UNREADABLE") warnings.push("We could not read the chassis number. Get closer, keep it sharp.");
       }
     } catch {
@@ -93,7 +128,7 @@ export default function Capture() {
     setStep("sending"); setError("");
     try {
       const body = {
-        declared_plate: plate, declared_chassis_last6: chassis, retake_of: retakeOf,
+        policy_no: policyNo, retake_of: retakeOf,
         shots: shots.filter((s) => photos[s.code]).map((s) => ({
           shot: s.code, image_b64: photos[s.code].b64, brightness: photos[s.code].brightness,
           sharpness: photos[s.code].sharpness, captured_at_ms: photos[s.code].capturedAt,
@@ -121,23 +156,49 @@ export default function Capture() {
   }
 
   function restart() {
-    setStep("details"); setPhotos({}); setIdx(0); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
+    setStep("details"); setPhotos({}); setIdx(0); setPolicy(null); setPolicyNo(""); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
   }
 
   if (step === "details") return (
     <section className="card">
       <h2>Inspect my car</h2>
-      <p>You will take {shots.length || 12} photos around your car with your phone camera. The app finds the car and captures
-        each photo for you, checks it is clear, and reads the number plate and chassis number. Stand about 1.5 to 2 metres away, in daylight.</p>
-      <div className="form">
-        <label>Registration number<input value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} placeholder="e.g. KA 01 AB 1234" /></label>
-        <label>Last 6 characters of the chassis number<input value={chassis} maxLength={6} onChange={(e) => setChassis(e.target.value.toUpperCase())} placeholder="from your RC" /></label>
+      <p>Enter your policy number. We will show the car on your policy, then guide you through {shots.length || 12} photos
+        around it. The app finds the car, checks each photo is clear, and reads the number plate and chassis number.
+        Stand about 1.5 to 2 metres away, in daylight.</p>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); findPolicy(policyNo); }}>
+        <label>Policy number<input value={policyNo} onChange={(e) => { setPolicyNo(e.target.value.toUpperCase()); setPolicy(null); }} placeholder="e.g. PN-DEMO-001" /></label>
+        <button type="submit" className="ghost" disabled={!policyNo.trim() || busy}>Find my policy</button>
+      </form>
+      {demoPolicies.length > 0 && !policy && (
+        <div className="muted small chips">Demo policies (synthetic): {demoPolicies.map((d) => (
+          <button key={d.policy_no} className="link" title={d.note} onClick={() => findPolicy(d.policy_no)}>{d.policy_no}</button>
+        ))}</div>
+      )}
+      {policy && (
+        <div className="policy">
+          <b>{policy.make_model}</b> · {policy.colour}<br />
+          Registration <b>{policy.plate}</b> · policy {policy.policy_no} · {policy.owner}<br />
+          <span className="muted small">Please photograph this car. We check the plate and chassis number in your photos against our records.</span>
+        </div>
+      )}
+      {policy && (
         <label className="check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           This is my car, or I have the owner's permission to photograph it.</label>
-      </div>
-      <p className="muted small">Car detection and text reading run on your phone. Photos are sent to our server for the decision. Demo: use test photos of cars you may photograph.</p>
+      )}
       {error && <p className="bad-text">{error}</p>}
-      <button disabled={!plate.trim() || chassis.trim().length < 6 || !consent || !shots.length} onClick={() => setStep("shots")}>Start</button>
+      <div className="row">
+        <button disabled={!policy || !consent || !shots.length || busy} onClick={() => setStep("shots")}>Start the photos</button>
+      </div>
+      {policy && (
+        <div className="demo-box">
+          <b>No car with you? Try the demo photos.</b>
+          <p className="muted small">12 sample photos of a blue Tata Nexon with the synthetic plate KA 01 AB 1234 (matches policy PN-DEMO-001).
+            They go through exactly the same checks. <a href={`${import.meta.env.BASE_URL}demo-photos/CREDITS.md`} target="_blank" rel="noreferrer">Photo credits</a></p>
+          <label className="check small"><input type="checkbox" checked={wrongChassis} onChange={(e) => setWrongChassis(e.target.checked)} />
+            Use a chassis label from a different car (fraud demo)</label>
+          <button className="ghost" disabled={!consent || !shots.length || busy} onClick={fillDemo}>{busy && analysing ? analysing : "Fill with demo photos"}</button>
+        </div>
+      )}
     </section>
   );
 
@@ -156,7 +217,7 @@ export default function Capture() {
               {photo.car?.found ? `Car detected ✓ (${Math.round(photo.car.score * 100)}% sure)` : "No car detected"}</li>}
             {photo.plate && <li className={photo.plateCheck === "MATCH" ? "ok-text" : "warn-text"}>
               Plate read: <b>{photo.plate.text || "-"}</b>, {ID_LABEL[photo.plateCheck]}</li>}
-            {photo.chassisRead && <li className={photo.chassisCheck === "MATCH" ? "ok-text" : "warn-text"}>
+            {photo.chassisRead && <li className={photo.chassisCheck === "SENT" ? "ok-text" : "warn-text"}>
               Chassis last 6 read: <b>{photo.chassisRead.last6 || "-"}</b>, {ID_LABEL[photo.chassisCheck]}</li>}
           </ul>
           {photo.warnings.map((w) => <p className="warn-text" key={w}>{w}</p>)}

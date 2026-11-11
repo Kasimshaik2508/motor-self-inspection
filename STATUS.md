@@ -1,4 +1,4 @@
-# Project status (updated Tue 10 Nov 2026)
+# Project status (updated Wed 11 Nov 2026)
 
 Deadlines: **Check-in 2 Thu 12 Nov** (deployed URL + one-page note) · Check-in 3 Mon 16 Nov · Final auction Wed 18 Nov
 
@@ -19,6 +19,8 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | **Free on-phone camera app** (10 Nov, per Nitin): live camera, car detection + auto-capture (COCO-SSD), plate + chassis OCR (Tesseract.js), decision from phone checks, damage -> reviewer | tested: OCR reads 3 synthetic plate formats + a synthetic VIN correctly; detector loads and runs; camera fallback works; 6 phone-only routes pass. NOT tested: live camera and car detection on a real car (needs a phone test) | |
 | **Reviewer console** (confirm / override with reason, photos + AI findings) | tested locally: override needs a reason, customer sees the reviewer's result. No login; memory-only storage | |
 | Low-confidence gate (<0.6), identity-conflict route, re-shoot round counting | in the photo app; scripted tests pass | |
+| **Demo policy database + demo photos (11 Nov, per Shashwat):** customer enters a policy number; plate and chassis come from our (synthetic) policy record. 3 demo policies; 12 free-licence demo photos with credits; "Fill with demo photos" button | tested locally 11 Nov in the browser: right car -> passes to damage review; wrong chassis -> fraud desk (identity conflict); wrong car for policy -> fraud desk. Customer never sees the chassis number | |
+| Better plate reading (11 Nov): plate-box finder, majority vote, look-alike fixes, Indian state-code check; server uses the better of front/rear | on the demo photos both plates read KA 01 AB 1234. Earlier version read neither. NOT tested on real Indian plate photos | |
 | **Live on Render (10 Nov):** website https://motor-self-inspection-web.onrender.com , API https://motor-self-inspection-api.onrender.com | tested live: opens without login, Inspect works, evaluation 418/420, no console errors. Pushes to main redeploy automatically (seen 10 Nov) | |
 
 ## To do before Check-in 2 (Thu 12 Nov)
@@ -33,7 +35,8 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 | Verified / not-verified checklist with evidence | | Not started |
 | Test the live app on a phone with a real car (camera, auto-capture, plate/chassis OCR) | Kasim / team | Not started |
 | Damage detection (later: free/cheap model, decided by the team) | | Later |
-| Calibrate on-phone dark/blur thresholds on real photos | | Not started |
+| Calibrate on-phone dark/blur thresholds on real photos (the night-dashboard odometer demo photo is flagged "too dark") | | Not started |
+| Measure plate reading on a public Indian plate dataset (licence check first) | | Not started |
 | Plain re-shoot message for the 420-case evaluation page (photo app already has it) | | Not started |
 | Confirm severity ladder with problem owner | | Not started |
 

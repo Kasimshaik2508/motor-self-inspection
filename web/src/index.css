@@ -55,3 +55,10 @@ textarea{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--
 .viewfinder .box{position:absolute;border:2px solid var(--ok);border-radius:6px;pointer-events:none}
 .viewfinder .hint{position:absolute;left:8px;right:8px;bottom:8px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.65);color:#fff;font-size:14px}
 ul.checks{margin:4px 0;padding-left:18px;font-size:14px}
+.policy{margin:12px 0;padding:12px;border-radius:10px;background:var(--infobg);border:1px solid var(--line)}
+.demo-box{margin-top:16px;padding:12px;border-radius:10px;border:1px dashed var(--line)}
+.demo-box p{margin:6px 0} .demo-box button{margin-top:8px}
+form.form{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+form.form label{flex:1;min-width:200px}
+.chips{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.demo-box a{color:var(--accent)}

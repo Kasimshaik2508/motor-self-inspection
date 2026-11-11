@@ -77,7 +77,11 @@ def build_findings(declared_plate, declared_chassis, phone_shots, vision_results
     missing += [r["shot"] for r in vision_results if not r["shows_expected_shot"]]   # wrong angle counts as missing
     bad = [(r["shot"], r["quality"]) for r in vision_results if r["quality"] != "OK"]
 
-    plate_read = next((seen[c]["plate_text"] for c in ("FRONT", "REAR") if c in seen and seen[c]["plate_text"]), "")
+    # Front and rear are both read; use the reading closest to the plate on file. OCR misreads one photo far more
+    # often than a car carries two different plates. Both readings stay visible to the reviewer (per-shot results).
+    reads = [seen[c]["plate_text"] for c in ("FRONT", "REAR") if c in seen and seen[c]["plate_text"]]
+    rank = {"MATCH": 0, "ONE_CHAR_SLIP": 1, "DIFFERENT": 2, "UNREADABLE": 3}
+    plate_read = min(reads, key=lambda t: rank[plate_relation(declared_plate, t)], default="")
     chassis_read = seen.get("CHASSIS_NUMBER", {}).get("chassis_last6", "")
 
     # Our own scores, NOT the capture SDK's: lighting = average photo brightness measured on the phone (0-1);
@@ -98,12 +102,13 @@ def build_findings(declared_plate, declared_chassis, phone_shots, vision_results
                     moire, round(hours, 2), sorted(set(missing), key=vision.SHOT_CODES.index), bad, list(best.values()))
 
 
-def run(declared_plate, declared_chassis, phone_shots, retake_of=None):
+def run(declared_plate, declared_chassis, phone_shots, retake_of=None, policy=None):
     """phone_shots: [{shot, image_b64, brightness, sharpness, captured_at_ms}] -> stored record"""
     previous = _store.get(retake_of) if retake_of else None
     attempt = (previous["attempt"] + 1) if previous else 1
     rec = {"id": uuid.uuid4().hex[:8], "created_at": time.time(), "attempt": attempt, "retake_of": retake_of,
            "declared": {"plate": declared_plate, "chassis_last6": declared_chassis},
+           "policy": policy,                    # the policy record the plate/chassis came from (None if typed)
            "photos": {s["shot"]: s["image_b64"] for s in phone_shots},
            "phone_checks": [{k: s.get(k) for k in ("shot", "brightness", "sharpness")} for s in phone_shots],
            "review": None}
@@ -181,7 +186,8 @@ def reviewer_summary(rec):
     d = rec.get("decision") or {}
     return {"id": rec["id"], "created_at": rec["created_at"], "status": rec["status"], "attempt": rec["attempt"],
             "ai_outcome": d.get("outcome"), "route": d.get("route"), "hold_reasons": rec.get("hold_reasons", []),
-            "plate": rec["declared"]["plate"], "final_outcome": (rec["review"] or {}).get("final_outcome")}
+            "plate": rec["declared"]["plate"], "policy_no": (rec.get("policy") or {}).get("policy_no"),
+            "final_outcome": (rec["review"] or {}).get("final_outcome")}
 
 
 def reviewer_detail(rec):
