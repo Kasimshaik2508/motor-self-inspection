@@ -13,3 +13,6 @@ run_*.csv
 .venv/
 .env.*
 !.env.example
+
+# local-only test photos (never commit)
+web/public/_local_test/

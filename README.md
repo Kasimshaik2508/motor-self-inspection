@@ -35,6 +35,62 @@ same checks. Credits and every edit: `web/public/demo-photos/CREDITS.md`. Tested
 This proves the flow and the rules, NOT real-world accuracy: the photos are not all of one car, and the plate is a clean
 synthetic one. The odometer photo (a night dashboard) still gets a "too dark" warning; the dark threshold is uncalibrated.
 
+## AI damage check: Google Gemini 3.1 Flash-Lite (chosen 11 Nov after testing)
+**How it works:** the server sends each of the 12 SOP photos to Gemini **in its own request** (in parallel, about
+6-8 s in all), asking as "a motor-insurance inspector in India" for real damage only (not reflections, dirt,
+tinted glass or design lines). The answer is cleaned into SOP panels, damage types and severity ranges.
+- **No damage found, photos fine, plate and chassis match -> approved with no person** (tested: about 6 s).
+- **Any damage found -> a reviewer confirms** before it changes the customer's outcome or record (team rule).
+- **Gemini unavailable** (no key, error, or the free tier's about-15-requests-a-minute limit) -> a reviewer checks damage.
+- **Plate and chassis:** the phone's OCR and Gemini both read them; whichever matches the record counts, and both
+  stay visible to the reviewer. Tested: Gemini misread our chassis label 3 times in a 12-photo request, the phone
+  read it right, so neither reader alone may send a customer to the fraud desk.
+- **Why one photo per request:** with all 12 in one request Gemini assumed one car, missed two swapped-in damaged
+  photos and copied the plate onto another car's photo. One at a time it caught both.
+
+**Tested and dropped: two free Hugging Face models on the phone** (YOLO11, `shanexf/car-damage-yolo11m-ft` and
+`vineetsarpal/yolov11n-car-damage`, converted to ONNX). Good at noticing damage, far too many false alarms on Indian
+cars (numbers below). Removed from the app.
+
+**Measured 11 Nov** with the same ONNX files and steps the phone uses, on 150 photos from the MIT-licensed
+[DrBimmer/comprehensive-car-damage](https://huggingface.co/datasets/DrBimmer/comprehensive-car-damage) dataset
+(25 random photos per class: front/rear x normal/crushed/breakage; real inspection-style photos, not used to train
+either model as far as their pages say), plus the 9 outside photos of our clean demo car:
+
+| Setting (confidence) | Damaged cars caught | Clean cars wrongly flagged | Our clean demo photos flagged |
+|---|---|---|---|
+| 0.35, either model (the app's setting) | **92 / 100** | 31 / 50 (62%) | 3 / 9 |
+| 0.50, either model | 84 / 100 | 18 / 50 (36%) | 1 / 9 |
+| 0.70, either model | 54 / 100 | 5 / 50 (10%) | 0 / 9 |
+| 0.35, both models must agree | 46 / 100 | 1 / 50 (2%) | 0 / 9 |
+
+- **Indian cars (11 Nov)**: 33 clean Indian cars (Swift, Dzire, Baleno, Alto, Tiago, Punch, Scorpio, XUV700, Creta, i20,
+  Seltos, Innova, City, Thar) and 7 damaged Indian cars, all free-licence Wikimedia Commons photos. At the app's 0.35:
+  **25 of 33 clean cars wrongly flagged (75%)**, mostly "door dent" on side views and "broken glass" on dark
+  windscreens; 5 of 7 damaged flagged, but only 1 (an Alto 800 front crash) clearly and on the right part; an
+  overturned car was missed. Too few damaged Indian photos exist under free licences for a real catch rate.
+  **Conclusion: not reliable enough for Indian cars yet**; needs retraining on Indian photos or a stronger model.
+- **Cloud comparison, Gemini 3.1 Flash-Lite (11 Nov)**, one photo at a time, same photos, prompt in `scratchpad`
+  test script (an inspector in India; ignore reflections, dirt, tinted glass, design lines):
+
+  | | Open models on the phone (0.35) | Gemini 3.1 Flash-Lite |
+  |---|---|---|
+  | Indian damaged caught | 5 / 7 (1 clearly) | **7 / 7** |
+  | Indian clean wrongly flagged | 25 / 33 | **1 / 33** |
+  | Korean damaged caught | 92 / 100 | **98 / 100** |
+  | Korean clean wrongly flagged | 31 / 50 | **2 / 50** |
+  | Our clean demo car flagged | 3 / 9 | **0 / 9** |
+  | Right end of the car (front/rear) | 75 of 78 | 67 right, 0 wrong, 31 named a side part |
+
+  About 3 s and 1,460 tokens per photo, 0 errors in 199 calls. ESTIMATED paid cost about $0.0005 per photo (about
+  Rs 0.4 per 9-photo inspection). Free tier used (Google may use free-tier inputs; all test photos were public).
+  Still untested: small scratches, a real car, the full 12-photo request the app sends.
+- Where: when damage was caught, the panel was on the correct end of the car 75 of 78 times.
+- No threshold gives both: catching 90%+ of damaged cars always flags about 60% of clean ones.
+- This dataset is mostly heavy damage (crushed / broken). Light scratches are missed more often (our own earlier
+  check: a thin keyed scratch was missed). Results are on Korean cars; Indian cars not tested yet.
+- Speed: about 2 s per photo in a laptop browser; a phone is slower (not measured).
+
 ## Anti-cheat (our rules, not the SOP's)
 - A photo FILE made before the inspection started (e.g. an old gallery photo) is refused on the phone.
 - Any photo from a file instead of the live camera, photos spread over more than 30 minutes (first attempt), or a
@@ -60,11 +116,12 @@ synthetic one. The odometer photo (a night dashboard) still gets a "too dark" wa
 - `tests/test_live_routes.py` - scripted model answers through every SOP route (routing only, not model accuracy).
 
 ## Vision model settings (Render -> motor-self-inspection-api -> Environment)
-- `VISION_PROVIDER` = `gemini` and `GEMINI_API_KEY` = your key (aistudio.google.com). Optional `GEMINI_MODEL`.
-  Gemini's free tier may use uploaded content to improve Google's products: test photos only, never real customers.
-- or `VISION_PROVIDER` = `openrouter`, `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`.
-- Without these (the current setup), the app uses the phone's own checks above and a reviewer checks damage.
-- **Untested:** the accuracy of any model on real car photos. Measure it on the team's own test photos.
+- `VISION_PROVIDER` = `gemini` and `GEMINI_API_KEY` = your key (aistudio.google.com/apikey). Optional
+  `GEMINI_MODEL` (default `gemini-3.1-flash-lite`).
+- Gemini's FREE tier may use uploaded content to improve Google's products: demo and test photos only, never real
+  customers. A paid key (billing on) is needed before real use. Estimated cost about Rs 0.4 per inspection.
+- Without these, the app uses the phone's own checks and a reviewer checks damage.
+- Locally: put `GEMINI_API_KEY=...` in `.env.local` (git ignores it).
 
 ## Run the test on the 420 gold cases
 ```

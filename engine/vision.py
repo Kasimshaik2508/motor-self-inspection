@@ -3,7 +3,8 @@ vision.py - the "eyes": sends the customer's photos to a vision-language model a
 
 WHY a separate, swappable file: the decision engine must not care WHICH model looked at the photos.
      Swap models with one setting, compare them on the same photos, and keep the SOP rules untouched.
-HOW: ONE request with all the photos (faster, and kinder to free-tier rate limits than 12 requests).
+HOW: one request PER PHOTO, sent in parallel (a single 12-photo request made the model copy answers between
+     photos; see analyze()).
      The model answers in strict JSON per photo: is it the right shot, is it usable, plate / chassis text,
      screen-photo suspicion, and every visible damage with panel, type, severity and confidence.
      We then CLEAN the answer: unknown panels -> OTHER, unknown damage types dropped, severities forced into
@@ -11,16 +12,20 @@ HOW: ONE request with all the photos (faster, and kinder to free-tier rate limit
 
 Settings (environment variables; keys live only in the host's settings, never in code):
   VISION_PROVIDER   gemini | openrouter | none      (default: none -> photos go straight to a reviewer)
-  GEMINI_API_KEY    + optional GEMINI_MODEL          (default gemini-2.5-flash)
+  GEMINI_API_KEY    + optional GEMINI_MODEL          (default gemini-3.1-flash-lite: cheapest; tested 11 Nov)
   OPENROUTER_API_KEY + optional OPENROUTER_MODEL     (default qwen/qwen-2.5-vl-7b-instruct:free)
   Gemini's FREE tier may use what you send to improve Google's products: use it only for test photos of
   cars you have permission to photograph, never for real customers.
-UNTESTED: how accurate any of these models is on real car photos. Measure it on your own test photos.
+TESTED 11 Nov (one photo per request, see README): Gemini 3.1 Flash-Lite caught 98/100 damaged cars and 7/7
+damaged Indian cars, and wrongly flagged 3 of 92 clean cars. NOT yet tested: small scratches on a real car, and
+how well it does with all 12 photos in one request (what the app sends).
 """
 import base64
 import json
 import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.request
 
@@ -86,12 +91,14 @@ class VisionUnavailable(Exception):
 
 def _prompt(shots):
     lines = [f"Image {i + 1}: should show {code} - {dict(SHOTS)[code]}" for i, (code, _) in enumerate(shots)]
-    return f"""You are a motor-insurance inspector checking a customer's photos of their own car before cover starts.
+    return f"""You are a motor-insurance inspector in India checking a customer's photos of their own car before cover starts.
 There are {len(shots)} images, in this order:
 {chr(10).join(lines)}
 
-For EACH image return one object. Report only what is visible. If you are unsure whether damage is present,
-include it with a LOW confidence rather than leaving it out (a missed damage becomes a paid claim).
+For EACH image return one object. Report ONLY real, visible body damage on the customer's car: dents, scratches,
+cracks, broken glass or lamps, missing or crushed parts. Do NOT report reflections, shadows, dirt, dust, water
+spots, stickers, badges, tinted glass, design lines or panel gaps (these caused most false alarms in our tests).
+If you are unsure whether something is damage, report it with a LOW confidence: a person will check it.
 Severity guide: 1 = minor/cosmetic (scratch under 10 cm, coin-sized dent); 2 = moderate (needs panel work or a part);
 3 = severe (broken or missing part, crease across a panel, windscreen crack in the driver's view).
 
@@ -127,7 +134,7 @@ def _gemini(shots):
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise VisionUnavailable("GEMINI_API_KEY is not set on the server")
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
     parts = [{"text": _prompt(shots)}] + [{"inline_data": {"mime_type": "image/jpeg", "data": b64}} for _, b64 in shots]
     out = _post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                 {"x-goog-api-key": key},
@@ -167,6 +174,30 @@ def _clean_severity(kind, sev):
     return sev
 
 
+def clean_damage(items):
+    """Any damage list (from a cloud model or the phone's models) -> only SOP panels/kinds, SOP severity ranges."""
+    damage = []
+    for d in (items or [])[:20]:
+        if not isinstance(d, dict):
+            continue
+        kind = str(d.get("kind", "")).upper()
+        if kind not in KINDS:
+            continue
+        panel = str(d.get("panel", "OTHER")).upper()
+        try:
+            conf = float(d.get("confidence", 0.5))
+        except (TypeError, ValueError):
+            conf = 0.5
+        try:
+            sev = _clean_severity(kind, d.get("severity"))
+        except (TypeError, ValueError):
+            sev = _clean_severity(kind, 1)
+        damage.append({"panel": panel if panel in PANELS else "OTHER", "kind": kind, "severity": sev,
+                       "description": str(d.get("description", ""))[:200],
+                       "confidence": round(max(0.0, min(1.0, conf)), 2)})
+    return damage
+
+
 def _parse(text, shots):
     """Turn the model's text into clean per-shot dicts, whatever small mistakes it made."""
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
@@ -181,20 +212,7 @@ def _parse(text, shots):
     results = []
     for i, (code, _) in enumerate(shots):
         s = by_index.get(i + 1, {})
-        damage = []
-        for d in s.get("damage", []) or []:
-            kind = str(d.get("kind", "")).upper()
-            if kind not in KINDS:
-                continue
-            panel = str(d.get("panel", "OTHER")).upper()
-            try:
-                conf = float(d.get("confidence", 0.5))
-            except (TypeError, ValueError):
-                conf = 0.5
-            damage.append({"panel": panel if panel in PANELS else "OTHER", "kind": kind,
-                           "severity": _clean_severity(kind, d.get("severity")),
-                           "description": str(d.get("description", ""))[:200],
-                           "confidence": round(max(0.0, min(1.0, conf)), 2)})
+        damage = clean_damage(s.get("damage"))
         quality = str(s.get("quality", "OK")).upper()
         results.append({
             "shot": code,
@@ -215,14 +233,31 @@ def analyze(shots):
     returns: (per_shot_results, vehicle, model_name)   or raises VisionUnavailable.
     """
     provider = os.environ.get("VISION_PROVIDER", "none").strip().lower()
-    if provider == "gemini":
-        text, name = _gemini(shots)
-    elif provider == "openrouter":
-        text, name = _openrouter(shots)
-    else:
+    if provider not in ("gemini", "openrouter"):
         raise VisionUnavailable("no vision model is configured (VISION_PROVIDER is 'none')")
-    results, vehicle = _parse(text, shots)
-    return results, vehicle, name
+    call = _gemini if provider == "gemini" else _openrouter
+
+    # ONE PHOTO PER REQUEST (tested 11 Nov): with all 12 photos in one request the model assumed they showed one
+    # car, missed two swapped-in damaged cars and copied the plate onto a different car's photo. One photo at a
+    # time it caught 98/100 damaged cars. Requests run in parallel so the customer waits about as long as for one.
+    def one(shot):
+        for attempt, wait in enumerate((5, 15, 25, None)):
+            try:
+                text, name = call([shot])
+                (r,), vehicle = _parse(text, [shot])
+                return r, vehicle, name
+            except VisionUnavailable as e:
+                # "too many requests" (free tier: about 15 a minute; one inspection is 12) or a busy server:
+                # wait and retry. After the last try the whole check fails safely: a reviewer checks damage.
+                if wait is None or not any(code in str(e) for code in ("429", "500", "503")):
+                    raise
+                time.sleep(wait)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        answers = list(pool.map(one, shots))
+    results = [r for r, _, _ in answers]
+    front = [v for (r, v, _), (code, _) in zip(answers, shots) if code == "FRONT" and v.get("make")]
+    vehicle = front[0] if front else next((v for _, v, _ in answers if v.get("make")), {})
+    return results, vehicle, answers[0][2] + " (one photo per request)"
 
 
 def check_base64_image(b64):

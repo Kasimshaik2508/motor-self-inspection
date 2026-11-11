@@ -82,16 +82,25 @@ def build_findings(declared_plate, declared_chassis, phone_shots, vision_results
 
     # Front and rear are both read; use the reading closest to the plate on file. OCR misreads one photo far more
     # often than a car carries two different plates. Both readings stay visible to the reviewer (per-shot results).
-    reads = [seen[c]["plate_text"] for c in ("FRONT", "REAR") if c in seen and seen[c]["plate_text"]]
+    # Two readers look at each photo: the phone's OCR and (when on) the cloud model. Both readings count, and
+    # every reading stays visible to the reviewer. Tested 11 Nov: the cloud model misread our chassis label the
+    # same way three times while the phone read it right, so neither reader alone may send a customer to fraud.
+    phone = {s["shot"]: s for s in phone_shots}
+    reads = [t for c in ("FRONT", "REAR") for t in (seen.get(c, {}).get("plate_text"), phone.get(c, {}).get("plate_read")) if t]
     rank = {"MATCH": 0, "ONE_CHAR_SLIP": 1, "DIFFERENT": 2, "UNREADABLE": 3}
     plate_read = min(reads, key=lambda t: rank[plate_relation(declared_plate, t)], default="")
-    chassis_read = seen.get("CHASSIS_NUMBER", {}).get("chassis_last6", "")
+    chassis_reads = [t for t in (seen.get("CHASSIS_NUMBER", {}).get("chassis_last6"),
+                                 (phone.get("CHASSIS_NUMBER", {}).get("chassis_read") or "")[-6:]) if t]
+    chassis_read = min(chassis_reads, key=lambda t: rank.get(chassis_relation(declared_chassis, t), 3), default="")
 
     # Our own scores, NOT the capture SDK's: lighting = average photo brightness measured on the phone (0-1);
     # blur = share of photos the model called BLURRY. Both need calibrating on real test photos.
     lighting = sum(s.get("brightness", 0.5) for s in phone_shots) / max(1, len(phone_shots))
     blur = sum(1 for r in vision_results if r["quality"] == "BLURRY") / max(1, len(vision_results))
-    moire = 0.9 if any(r["screen_photo"] for r in vision_results) else 0.0
+    # OUR mapping to the SOP's moire score: the model must flag 2+ photos as "photo of a screen" to count as a
+    # screen-recording fraud signal. One flagged photo goes to a reviewer instead (see run()): tested 11 Nov,
+    # Gemini flagged our drawn demo chassis label alone, which would have sent an honest customer to the fraud desk.
+    moire = 0.9 if sum(1 for r in vision_results if r["screen_photo"]) >= 2 else 0.0
     oldest = min((s.get("captured_at_ms") or time.time() * 1000) for s in phone_shots) if phone_shots else time.time() * 1000
     hours = max(0.0, (time.time() * 1000 - oldest) / 3_600_000)
 
@@ -148,6 +157,12 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None, rc=None):
         hold.append("LOW_CONFIDENCE_DAMAGE")
     if d.route in ("FRAUD_DESK", "REVIEWER_CONFIRM"):
         hold.append(d.route)
+    # Team rule (11 Nov): the AI may approve a car on its own only when it sees NO damage. Anything it reports
+    # is confirmed by a person before it goes on the customer's record or changes their outcome.
+    if damage_checked and any(r["damage"] for r in results) and d.route != "FRAUD_DESK":
+        hold.append("AI_FOUND_DAMAGE")
+    if sum(1 for r in results if r.get("screen_photo")) == 1 and d.route != "FRAUD_DESK":
+        hold.append("ONE_PHOTO_LOOKS_LIKE_A_SCREEN")                  # a person decides; not enough for fraud
     # Anti-cheat checks (OUR rules, not the SOP's): only matter when the photos would otherwise pass.
     if d.outcome in ("APPROVE", "APPROVE_WITH_EXCLUSIONS"):
         times = [s["captured_at_ms"] for s in phone_shots + extra if s.get("captured_at_ms")]
@@ -157,7 +172,7 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None, rc=None):
             hold.append("PHOTO_FROM_FILE")                           # not the live camera: a person checks
         if any(s["shot"].startswith("DAMAGE_CLOSEUP") for s in extra):
             hold.append("CUSTOMER_REPORTED_DAMAGE")                  # customer showed damage: a person looks
-    if any(h in hold for h in ("IDENTITY_CONFLICT", "LOW_CONFIDENCE_DAMAGE", "REVIEWER_CONFIRM", "PHOTOS_NOT_IN_ONE_SESSION",
+    if any(h in hold for h in ("IDENTITY_CONFLICT", "LOW_CONFIDENCE_DAMAGE", "REVIEWER_CONFIRM", "AI_FOUND_DAMAGE", "ONE_PHOTO_LOOKS_LIKE_A_SCREEN", "PHOTOS_NOT_IN_ONE_SESSION",
                                "PHOTO_FROM_FILE", "CUSTOMER_REPORTED_DAMAGE")) and d.route != "FRAUD_DESK":
         message = "Thank you, we have your photos. A reviewer is confirming the result and will get back to you shortly."
     elif "DAMAGE_NOT_ASSESSED_BY_AI" in hold:
