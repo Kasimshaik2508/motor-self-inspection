@@ -102,13 +102,13 @@ def build_findings(declared_plate, declared_chassis, phone_shots, vision_results
                     moire, round(hours, 2), sorted(set(missing), key=vision.SHOT_CODES.index), bad, list(best.values()))
 
 
-def run(declared_plate, declared_chassis, phone_shots, retake_of=None, policy=None):
+def run(declared_plate, declared_chassis, phone_shots, retake_of=None, rc=None):
     """phone_shots: [{shot, image_b64, brightness, sharpness, captured_at_ms}] -> stored record"""
     previous = _store.get(retake_of) if retake_of else None
     attempt = (previous["attempt"] + 1) if previous else 1
     rec = {"id": uuid.uuid4().hex[:8], "created_at": time.time(), "attempt": attempt, "retake_of": retake_of,
            "declared": {"plate": declared_plate, "chassis_last6": declared_chassis},
-           "policy": policy,                    # the policy record the plate/chassis came from (None if typed)
+           "rc": rc,                            # the RC record the plate/chassis came from (None if typed)
            "photos": {s["shot"]: s["image_b64"] for s in phone_shots},
            "phone_checks": [{k: s.get(k) for k in ("shot", "brightness", "sharpness")} for s in phone_shots],
            "review": None}
@@ -186,7 +186,7 @@ def reviewer_summary(rec):
     d = rec.get("decision") or {}
     return {"id": rec["id"], "created_at": rec["created_at"], "status": rec["status"], "attempt": rec["attempt"],
             "ai_outcome": d.get("outcome"), "route": d.get("route"), "hold_reasons": rec.get("hold_reasons", []),
-            "plate": rec["declared"]["plate"], "policy_no": (rec.get("policy") or {}).get("policy_no"),
+            "plate": rec["declared"]["plate"], "car_no": (rec.get("rc") or {}).get("car_no"),
             "final_outcome": (rec["review"] or {}).get("final_outcome")}
 
 

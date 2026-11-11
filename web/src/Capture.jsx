@@ -1,9 +1,10 @@
 /*
   Capture.jsx - the CUSTOMER app: photograph the car, check each photo on the phone, send, get a decision.
 
-  Steps:  policy -> 12 guided shots -> review -> sending -> result (-> retake once, if asked)
-  The customer enters only the POLICY NUMBER. The plate and chassis number come from the insurer's policy record
-  (engine/policies.py, synthetic demo data), so a cheater cannot type numbers that match their photos.
+  Steps:  car number -> 12 guided shots -> review -> sending -> result (-> retake once, if asked)
+  The customer enters only the CAR NUMBER. The chassis number comes from the car's RC record (in real life the
+  government VAHAN lookup; here engine/vehicles.py, synthetic demo data), so a cheater cannot type numbers that
+  match their photos.
   Demo helper: "Fill with demo photos" loads the 12 sample photos (web/public/demo-photos) and runs the same checks.
   Each shot: live camera (Camera.jsx) with on-phone car detection and auto-capture; then, still on the phone:
   brightness/blur check, "is there a car in this photo?", and OCR of the plate (front/rear) or chassis number.
@@ -18,16 +19,16 @@ import { compareIds, detectCar, readChassis, readPlate } from "./detect";
 
 // shots of the outside of the car (a car should be visible); the rest are close-ups
 const CAR_SHOTS = ["FRONT", "FRONT_LEFT_45", "LEFT_SIDE", "REAR_LEFT_45", "REAR", "REAR_RIGHT_45", "RIGHT_SIDE", "FRONT_RIGHT_45", "ROOF_AND_GLASS"];
-const ID_LABEL = { MATCH: "matches your policy ✓", ONE_CHAR_SLIP: "one character differs (probably a reading slip)", DIFFERENT: "does NOT match your policy", UNREADABLE: "could not be read", SENT: "we will check it against your policy" };
+const ID_LABEL = { MATCH: "matches the RC record ✓", ONE_CHAR_SLIP: "one character differs (probably a reading slip)", DIFFERENT: "does NOT match the RC record", UNREADABLE: "could not be read", SENT: "we will check it against the RC record" };
 
 const pretty = (s) => String(s).replace(/_45/, " corner").replace(/_/g, " ").toLowerCase();
 
 export default function Capture() {
   const [shots, setShots] = useState([]);
   const [step, setStep] = useState("details");
-  const [policyNo, setPolicyNo] = useState("");
-  const [policy, setPolicy] = useState(null);       // the car on file: model, colour, plate (never the chassis)
-  const [demoPolicies, setDemoPolicies] = useState([]);
+  const [carNo, setCarNo] = useState("");
+  const [car, setCar] = useState(null);             // the car on the RC record: model, colour, plate (never the chassis)
+  const [demoCars, setDemoCars] = useState([]);
   const [wrongChassis, setWrongChassis] = useState(false);
   const [consent, setConsent] = useState(false);
   const [photos, setPhotos] = useState({});        // shot code -> processed photo
@@ -43,13 +44,13 @@ export default function Capture() {
 
   useEffect(() => {
     get("/api/shots").then(setShots).catch((e) => setError(e.message));
-    get("/api/policies").then(setDemoPolicies).catch(() => {});
+    get("/api/vehicles").then(setDemoCars).catch(() => {});
   }, []);
-  const plate = policy?.plate || "";
+  const plate = car?.plate || "";
 
-  async function findPolicy(no) {
-    setBusy(true); setError(""); setPolicy(null);
-    try { setPolicy(await get("/api/policies/" + encodeURIComponent(no.trim()))); setPolicyNo(no.trim().toUpperCase()); }
+  async function findCar(no) {
+    setBusy(true); setError(""); setCar(null);
+    try { const c = await get("/api/vehicles/" + encodeURIComponent(no.trim())); setCar(c); setCarNo(c.plate); }
     catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -128,7 +129,7 @@ export default function Capture() {
     setStep("sending"); setError("");
     try {
       const body = {
-        policy_no: policyNo, retake_of: retakeOf,
+        car_no: carNo, retake_of: retakeOf,
         shots: shots.filter((s) => photos[s.code]).map((s) => ({
           shot: s.code, image_b64: photos[s.code].b64, brightness: photos[s.code].brightness,
           sharpness: photos[s.code].sharpness, captured_at_ms: photos[s.code].capturedAt,
@@ -156,43 +157,43 @@ export default function Capture() {
   }
 
   function restart() {
-    setStep("details"); setPhotos({}); setIdx(0); setPolicy(null); setPolicyNo(""); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
+    setStep("details"); setPhotos({}); setIdx(0); setCar(null); setCarNo(""); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
   }
 
   if (step === "details") return (
     <section className="card">
       <h2>Inspect my car</h2>
-      <p>Enter your policy number. We will show the car on your policy, then guide you through {shots.length || 12} photos
+      <p>Enter your car number. We will show the car from its registration (RC) record, then guide you through {shots.length || 12} photos
         around it. The app finds the car, checks each photo is clear, and reads the number plate and chassis number.
         Stand about 1.5 to 2 metres away, in daylight.</p>
-      <form className="form" onSubmit={(e) => { e.preventDefault(); findPolicy(policyNo); }}>
-        <label>Policy number<input value={policyNo} onChange={(e) => { setPolicyNo(e.target.value.toUpperCase()); setPolicy(null); }} placeholder="e.g. PN-DEMO-001" /></label>
-        <button type="submit" className="ghost" disabled={!policyNo.trim() || busy}>Find my policy</button>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); findCar(carNo); }}>
+        <label>Car number<input value={carNo} onChange={(e) => { setCarNo(e.target.value.toUpperCase()); setCar(null); }} placeholder="e.g. KA 01 AB 1234" /></label>
+        <button type="submit" className="ghost" disabled={!carNo.trim() || busy}>Find my car</button>
       </form>
-      {demoPolicies.length > 0 && !policy && (
-        <div className="muted small chips">Demo policies (synthetic): {demoPolicies.map((d) => (
-          <button key={d.policy_no} className="link" title={d.note} onClick={() => findPolicy(d.policy_no)}>{d.policy_no}</button>
+      {demoCars.length > 0 && !car && (
+        <div className="muted small chips">Demo cars (synthetic): {demoCars.map((d) => (
+          <button key={d.car_no} className="link" title={d.note} onClick={() => findCar(d.car_no)}>{d.plate}</button>
         ))}</div>
       )}
-      {policy && (
+      {car && (
         <div className="policy">
-          <b>{policy.make_model}</b> · {policy.colour}<br />
-          Registration <b>{policy.plate}</b> · policy {policy.policy_no} · {policy.owner}<br />
-          <span className="muted small">Please photograph this car. We check the plate and chassis number in your photos against our records.</span>
+          <b>{car.make_model}</b> · {car.colour}<br />
+          Registration <b>{car.plate}</b> · owner {car.owner}<br />
+          <span className="muted small">Please photograph this car. We check the plate and chassis number in your photos against the RC record.</span>
         </div>
       )}
-      {policy && (
+      {car && (
         <label className="check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           This is my car, or I have the owner's permission to photograph it.</label>
       )}
       {error && <p className="bad-text">{error}</p>}
       <div className="row">
-        <button disabled={!policy || !consent || !shots.length || busy} onClick={() => setStep("shots")}>Start the photos</button>
+        <button disabled={!car || !consent || !shots.length || busy} onClick={() => setStep("shots")}>Start the photos</button>
       </div>
-      {policy && (
+      {car && (
         <div className="demo-box">
           <b>No car with you? Try the demo photos.</b>
-          <p className="muted small">12 sample photos of a blue Tata Nexon with the synthetic plate KA 01 AB 1234 (matches policy PN-DEMO-001).
+          <p className="muted small">12 sample photos of a blue Tata Nexon with the synthetic plate KA 01 AB 1234 (matches demo car KA 01 AB 1234).
             They go through exactly the same checks. <a href={`${import.meta.env.BASE_URL}demo-photos/CREDITS.md`} target="_blank" rel="noreferrer">Photo credits</a></p>
           <label className="check small"><input type="checkbox" checked={wrongChassis} onChange={(e) => setWrongChassis(e.target.checked)} />
             Use a chassis label from a different car (fraud demo)</label>
