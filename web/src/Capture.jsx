@@ -1,11 +1,15 @@
 /*
   Capture.jsx - the CUSTOMER app: photograph the car, check each photo on the phone, send, get a decision.
 
-  Steps:  car number -> 12 guided shots -> review -> sending -> result (-> retake once, if asked)
+  Steps:  car number -> checklist -> guided shots -> review -> sending -> result (-> retake once, if asked)
   The customer enters only the CAR NUMBER. The chassis number comes from the car's RC record (in real life the
   government VAHAN lookup; here engine/vehicles.py, synthetic demo data), so a cheater cannot type numbers that
   match their photos.
-  Demo helper: "Fill with demo photos" loads the 12 sample photos (web/public/demo-photos) and runs the same checks.
+  Shot order (from /api/shots): RC card and odometer from the driver's seat, chassis and engine with the bonnet open,
+  then the walk-around, then up to 3 optional damage close-ups. Only the SOP's 12 shots decide; RC + close-ups are
+  for the reviewer. Anti-cheat: a photo FILE older than the start of this inspection is refused on the phone, and the
+  server sends file photos and photos spread over more than 30 minutes to a reviewer.
+  Demo helper: "Fill with demo photos" loads the 13 sample photos (12 SOP shots + an RC card; web/public/demo-photos) and runs the same checks.
   Each shot: live camera (Camera.jsx) with on-phone car detection and auto-capture; then, still on the phone:
   brightness/blur check, "is there a car in this photo?", and OCR of the plate (front/rear) or chassis number.
   If the live camera is unavailable (laptop, permission refused) the customer can pick or take a photo file instead.
@@ -21,7 +25,15 @@ import { compareIds, detectCar, readChassis, readPlate } from "./detect";
 const CAR_SHOTS = ["FRONT", "FRONT_LEFT_45", "LEFT_SIDE", "REAR_LEFT_45", "REAR", "REAR_RIGHT_45", "RIGHT_SIDE", "FRONT_RIGHT_45", "ROOF_AND_GLASS"];
 const ID_LABEL = { MATCH: "matches the RC record ✓", ONE_CHAR_SLIP: "one character differs (probably a reading slip)", DIFFERENT: "does NOT match the RC record", UNREADABLE: "could not be read", SENT: "we will check it against the RC record" };
 
-const pretty = (s) => String(s).replace(/_45/, " corner").replace(/_/g, " ").toLowerCase();
+const CHECKLIST = [
+  ["rc", "I have the car's RC card with me."],
+  ["chassis", "I know where the chassis number is on the car."],
+  ["place", "The car is in daylight in an open place: not under a tree, not inside a garage, workshop, basement or parking lot, and not at a petrol pump."],
+  ["clean", "The windscreen and windows are clean."],
+  ["ready", "The bonnet is open, all windows are rolled up, and I am in the driver's seat."],
+];
+
+const pretty = (s) => String(s).replace(/_45/, " corner").replace(/_/g, " ").toLowerCase().replace(/^rc /, "RC ");
 
 export default function Capture() {
   const [shots, setShots] = useState([]);
@@ -31,6 +43,8 @@ export default function Capture() {
   const [demoCars, setDemoCars] = useState([]);
   const [wrongChassis, setWrongChassis] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [ticks, setTicks] = useState({});           // the pre-inspection checklist
+  const [sessionStart, setSessionStart] = useState(0);
   const [photos, setPhotos] = useState({});        // shot code -> processed photo
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -55,13 +69,14 @@ export default function Capture() {
     finally { setBusy(false); }
   }
 
-  /** Demo helper: loads the 12 sample photos and runs exactly the same on-phone checks as a real photo. */
+  /** Demo helper: loads the 13 sample photos and runs exactly the same on-phone checks as a real photo. */
   async function fillDemo() {
     setBusy(true); setError("");
     try {
       const done = {};
-      for (const [i, s] of shots.entries()) {
-        setAnalysing(`Demo photo ${i + 1} of ${shots.length}: ${pretty(s.code)}…`);
+      const needed = shots.filter((s) => s.required);
+      for (const [i, s] of needed.entries()) {
+        setAnalysing(`Demo photo ${i + 1} of ${needed.length}: ${pretty(s.code)}…`);
         const name = s.code === "CHASSIS_NUMBER" && wrongChassis ? "CHASSIS_NUMBER_wrong_car" : s.code;
         const res = await fetch(`${import.meta.env.BASE_URL}demo-photos/${name}.jpg`);
         if (!res.ok) throw new Error(`Demo photo ${name} could not be loaded.`);
@@ -118,6 +133,13 @@ export default function Capture() {
     const file = e.target.files?.[0];
     e.target.value = "";                              // lets the customer pick the same file again after a retake
     if (!file) return;
+    // A photo file made before this inspection started is an OLD photo (e.g. from the gallery): refuse it.
+    // (A photo taken just now with the phone camera has a fresh time. File times can be edited, so this stops
+    // casual reuse, not a determined cheater: the server also sends every file photo to a reviewer.)
+    if (file.lastModified && sessionStart && file.lastModified < sessionStart - 2 * 60_000) {
+      setError("This photo was taken before you started the inspection. Please take a new photo now.");
+      return;
+    }
     try { await accept(shot.code, { ...(await processPhoto(file)), via: "file" }); } catch (err) { setError(err.message); }
   }
 
@@ -132,7 +154,7 @@ export default function Capture() {
         car_no: carNo, retake_of: retakeOf,
         shots: shots.filter((s) => photos[s.code]).map((s) => ({
           shot: s.code, image_b64: photos[s.code].b64, brightness: photos[s.code].brightness,
-          sharpness: photos[s.code].sharpness, captured_at_ms: photos[s.code].capturedAt,
+          sharpness: photos[s.code].sharpness, captured_at_ms: photos[s.code].capturedAt, via: photos[s.code].via || null,
           car_detected: CAR_SHOTS.includes(s.code) ? !!photos[s.code].car?.found : null,
           plate_read: photos[s.code].plate?.text || "", chassis_read: photos[s.code].chassisRead?.last6 || "",
         })),
@@ -157,15 +179,15 @@ export default function Capture() {
   }
 
   function restart() {
-    setStep("details"); setPhotos({}); setIdx(0); setCar(null); setCarNo(""); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
+    setStep("details"); setTicks({}); setPhotos({}); setIdx(0); setCar(null); setCarNo(""); setResult(null); setRetakeOf(null); setHighlight([]); setError("");
   }
 
   if (step === "details") return (
     <section className="card">
       <h2>Inspect my car</h2>
-      <p>Enter your car number. We will show the car from its registration (RC) record, then guide you through {shots.length || 12} photos
-        around it. The app finds the car, checks each photo is clear, and reads the number plate and chassis number.
-        Stand about 1.5 to 2 metres away, in daylight.</p>
+      <p>Enter your car number. We will show the car from its registration (RC) record, then guide you through the photos:
+        your RC card and odometer from the driver's seat, the chassis number and engine, then a walk around the car.
+        The app finds the car, checks each photo is clear, and reads the number plate and chassis number.</p>
       <form className="form" onSubmit={(e) => { e.preventDefault(); findCar(carNo); }}>
         <label>Car number<input value={carNo} onChange={(e) => { setCarNo(e.target.value.toUpperCase()); setCar(null); }} placeholder="e.g. KA 01 AB 1234" /></label>
         <button type="submit" className="ghost" disabled={!carNo.trim() || busy}>Find my car</button>
@@ -188,12 +210,12 @@ export default function Capture() {
       )}
       {error && <p className="bad-text">{error}</p>}
       <div className="row">
-        <button disabled={!car || !consent || !shots.length || busy} onClick={() => setStep("shots")}>Start the photos</button>
+        <button disabled={!car || !consent || !shots.length || busy} onClick={() => setStep("prep")}>Next: get ready</button>
       </div>
       {car && (
         <div className="demo-box">
           <b>No car with you? Try the demo photos.</b>
-          <p className="muted small">12 sample photos of a blue Tata Nexon with the synthetic plate KA 01 AB 1234 (matches demo car KA 01 AB 1234).
+          <p className="muted small">13 sample photos (a synthetic RC card + 12 photos of a blue Tata Nexon) with the synthetic plate KA 01 AB 1234 (matches demo car KA 01 AB 1234).
             They go through exactly the same checks. <a href={`${import.meta.env.BASE_URL}demo-photos/CREDITS.md`} target="_blank" rel="noreferrer">Photo credits</a></p>
           <label className="check small"><input type="checkbox" checked={wrongChassis} onChange={(e) => setWrongChassis(e.target.checked)} />
             Use a chassis label from a different car (fraud demo)</label>
@@ -203,12 +225,39 @@ export default function Capture() {
     </section>
   );
 
+  if (step === "prep") {
+    const allTicked = CHECKLIST.every(([k]) => ticks[k]);
+    return (
+      <section className="card">
+        <h2>Before you start</h2>
+        <p>Tick each one when it is done. This avoids most retakes.</p>
+        {CHECKLIST.map(([k, text]) => (
+          <label className="check" key={k}><input type="checkbox" checked={!!ticks[k]}
+            onChange={(e) => setTicks((t) => ({ ...t, [k]: e.target.checked }))} /> {text}</label>
+        ))}
+        <details className="small">
+          <summary>Where is the chassis number?</summary>
+          <p className="muted">It is a 17-character number <b>engraved in the metal</b> of the car. Most cars: under the bonnet,
+            on the body near the windscreen. Some cars: on a metal plate at the driver or passenger door pillar. It is also
+            printed on your RC. Do not photograph the sticker on the windscreen.</p>
+        </details>
+        <p className="muted small">Take all the photos in one go, with the live camera. Old photos from your gallery are
+          not accepted. Don't zoom: step closer instead.</p>
+        <div className="row">
+          <button className="ghost" onClick={() => setStep("details")}>Back</button>
+          <button disabled={!allTicked} onClick={() => { setSessionStart(Date.now()); setIdx(0); setStep("shots"); }}>Start the photos</button>
+        </div>
+      </section>
+    );
+  }
+
   if (step === "shots" && shot) return (
     <section className="card">
-      <h2>Photo {idx + 1} of {shots.length}{retakeOf ? " · retake" : ""}</h2>
+      <h2>{shot.required ? `Photo ${idx + 1} of ${shots.filter((s) => s.required).length}` : "Extra: damage close-up"}{retakeOf ? " · retake" : ""}</h2>
       <Strip shots={shots} photos={photos} idx={idx} highlight={highlight} onPick={setIdx} />
-      <h3>{pretty(shot.code)}</h3>
+      <h3>{pretty(shot.code)}{!shot.required && " (optional)"}</h3>
       <p>{shot.what}.</p>
+      {shot.tip && <p className="muted small">{shot.tip}</p>}
       {highlight.includes(shot.code) && <p className="warn-text">We need this photo again.</p>}
       {photo ? (
         <>
@@ -237,7 +286,7 @@ export default function Capture() {
           <div className="row">
             <label className={"button" + (camFailed ? "" : " ghost")}>{camFailed ? "Take or choose photo" : "Upload a photo instead"}
               <input type="file" accept="image/*" capture="environment" hidden onChange={onFile} /></label>
-            <button className="ghost" onClick={next}>Skip this shot</button>
+            <button className="ghost" onClick={next}>{shot.required ? "Skip this shot" : "Skip (no damage)"}</button>
           </div>
         </>
       )}
@@ -250,21 +299,23 @@ export default function Capture() {
   );
 
   if (step === "review") {
-    const missing = shots.filter((s) => !photos[s.code]);
+    const missing = shots.filter((s) => s.required && !photos[s.code]);
+    const noRc = !photos.RC_CARD;
     return (
       <section className="card">
         <h2>Check your photos</h2>
         <div className="thumbs">
           {shots.map((s, i) => (
             <button key={s.code} className="thumb" onClick={() => { setIdx(i); setStep("shots"); }}>
-              {photos[s.code] ? <img src={photos[s.code].dataUrl} alt="" /> : <span className="empty">missing</span>}
+              {photos[s.code] ? <img src={photos[s.code].dataUrl} alt="" /> : <span className="empty">{s.required ? "missing" : "optional"}</span>}
               <span>{pretty(s.code)}{photos[s.code]?.warnings.length ? " ⚠" : ""}</span>
             </button>
           ))}
         </div>
         {missing.length > 0 && <p className="warn-text">{missing.length} photo(s) missing. Missing photos will mean a retake request.</p>}
+        {noRc && <p className="bad-text">Add the photo of your RC card before sending.</p>}
         {error && <p className="bad-text">{error}</p>}
-        <button onClick={send} disabled={missing.length === shots.length}>Send for inspection</button>
+        <button onClick={send} disabled={noRc || missing.length === shots.filter((s) => s.required).length}>Send for inspection</button>
       </section>
     );
   }

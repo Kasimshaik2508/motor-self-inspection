@@ -28,6 +28,9 @@ import vision
 
 LOW_CONFIDENCE = 0.6     # OUR choice: damage below this confidence is checked by a person. Not from the SOP.
 STORE_LIMIT = 50
+SESSION_MINUTES = 30     # OUR choice: all first-attempt photos should be taken in one go (one visit to the car).
+                         # Photos spread over more time could come from different places or cars -> a person checks.
+                         # The times come from the phone, so a determined cheater could fake them (see README).
 _store = OrderedDict()   # id -> record (newest last)
 
 PLAIN_SHOT = {c: c.replace("_45", " corner").replace("_", " ").lower() for c in vision.SHOT_CODES}
@@ -110,8 +113,10 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None, rc=None):
            "declared": {"plate": declared_plate, "chassis_last6": declared_chassis},
            "rc": rc,                            # the RC record the plate/chassis came from (None if typed)
            "photos": {s["shot"]: s["image_b64"] for s in phone_shots},
-           "phone_checks": [{k: s.get(k) for k in ("shot", "brightness", "sharpness")} for s in phone_shots],
+           "phone_checks": [{k: s.get(k) for k in ("shot", "brightness", "sharpness", "via")} for s in phone_shots],
            "review": None}
+    extra = [s for s in phone_shots if s["shot"] not in vision.SHOT_CODES]      # RC card, damage close-ups
+    phone_shots = [s for s in phone_shots if s["shot"] in vision.SHOT_CODES]   # only the SOP's 12 shots decide
     damage_checked = True
     try:
         results, vehicle, model = vision.analyze([(s["shot"], s["image_b64"]) for s in phone_shots])
@@ -143,7 +148,17 @@ def run(declared_plate, declared_chassis, phone_shots, retake_of=None, rc=None):
         hold.append("LOW_CONFIDENCE_DAMAGE")
     if d.route in ("FRAUD_DESK", "REVIEWER_CONFIRM"):
         hold.append(d.route)
-    if any(h in hold for h in ("IDENTITY_CONFLICT", "LOW_CONFIDENCE_DAMAGE", "REVIEWER_CONFIRM")) and d.route != "FRAUD_DESK":
+    # Anti-cheat checks (OUR rules, not the SOP's): only matter when the photos would otherwise pass.
+    if d.outcome in ("APPROVE", "APPROVE_WITH_EXCLUSIONS"):
+        times = [s["captured_at_ms"] for s in phone_shots + extra if s.get("captured_at_ms")]
+        if not retake_of and times and (max(times) - min(times)) > SESSION_MINUTES * 60_000:
+            hold.append("PHOTOS_NOT_IN_ONE_SESSION")
+        if any(s.get("via") == "file" for s in phone_shots + extra):
+            hold.append("PHOTO_FROM_FILE")                           # not the live camera: a person checks
+        if any(s["shot"].startswith("DAMAGE_CLOSEUP") for s in extra):
+            hold.append("CUSTOMER_REPORTED_DAMAGE")                  # customer showed damage: a person looks
+    if any(h in hold for h in ("IDENTITY_CONFLICT", "LOW_CONFIDENCE_DAMAGE", "REVIEWER_CONFIRM", "PHOTOS_NOT_IN_ONE_SESSION",
+                               "PHOTO_FROM_FILE", "CUSTOMER_REPORTED_DAMAGE")) and d.route != "FRAUD_DESK":
         message = "Thank you, we have your photos. A reviewer is confirming the result and will get back to you shortly."
     elif "DAMAGE_NOT_ASSESSED_BY_AI" in hold:
         message = ("All 12 photos passed our checks and your number plate and chassis number match. "

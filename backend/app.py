@@ -86,6 +86,7 @@ class Shot(BaseModel):
     brightness: Optional[float] = None     # measured on the phone, 0 (black) to 1 (white)
     sharpness: Optional[float] = None      # measured on the phone; higher = sharper
     captured_at_ms: Optional[float] = None
+    via: Optional[str] = None              # "camera" (live camera), "file" (photo file), "demo" (demo photos)
     car_detected: Optional[bool] = None    # on-phone car detector (outside shots only)
     plate_read: str = ""                   # on-phone OCR (FRONT / REAR)
     chassis_read: str = ""                 # on-phone OCR (CHASSIS_NUMBER), last 6 characters
@@ -108,7 +109,7 @@ class ReviewIn(BaseModel):
 
 @app.get("/api/shots")
 def shots():
-    return [{"code": c, "what": w} for c, w in vision.SHOTS]
+    return vision.CAPTURE                  # 12 SOP shots in capture order + RC card + optional close-ups
 
 
 NOT_FOUND = "We could not find a car with that number. Check it and try again."
@@ -144,7 +145,7 @@ def create_inspection(body: InspectionIn):
         raise HTTPException(400, "no photos were sent")
     seen = set()
     for s in body.shots:
-        if s.shot not in vision.SHOT_CODES or s.shot in seen:
+        if s.shot not in vision.CAPTURE_CODES or s.shot in seen:
             raise HTTPException(400, f"unknown or repeated shot: {s.shot}")
         seen.add(s.shot)
         try:

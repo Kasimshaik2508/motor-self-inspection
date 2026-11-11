@@ -112,7 +112,8 @@ function Detail({ id, onBack }) {
                   <b>{pretty(code)}</b>
                   {s && <div className="small">quality {pretty(s.quality)}{!s.shows_expected_shot && " · WRONG ANGLE"}{s.screen_photo && " · LOOKS LIKE A SCREEN"}
                     {s.plate_text && <> · plate “{s.plate_text}”</>}{s.chassis_last6 && <> · chassis “{s.chassis_last6}”</>}</div>}
-                  {phone[code] && <div className="small muted">phone: brightness {phone[code].brightness}, sharpness {phone[code].sharpness}</div>}
+                  {phone[code] && <div className="small muted">phone: brightness {phone[code].brightness}, sharpness {phone[code].sharpness}{phone[code].via && <> · from {phone[code].via === "file" ? <b className="warn-text">a photo file</b> : phone[code].via}</>}</div>}
+                  {!s && /^(RC_CARD|DAMAGE_CLOSEUP)/.test(code) && <div className="small muted">for the reviewer: not used in the AI decision</div>}
                   {s?.damage.map((x, i) => (
                     <div key={i} className={"small " + (x.confidence < 0.6 ? "warn-text" : "")}>
                       {pretty(x.panel)}: {pretty(x.kind)}, severity {x.severity}, confidence {x.confidence} — {x.description}

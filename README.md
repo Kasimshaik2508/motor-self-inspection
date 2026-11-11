@@ -6,7 +6,11 @@ APPROVE / APPROVE_WITH_EXCLUSIONS / RESHOOT / REJECT with reasons and a damage r
 ## What the app does (three tabs)
 1. **Inspect my car** (customer): the customer enters only their **car number** (self-inspection happens before a policy
    exists). The chassis number comes from the car's RC record: in real life the government VAHAN lookup, here a
-   synthetic stand-in table (`engine/vehicles.py`), so nobody can type numbers that match their own photos. Then the live phone camera guides them through the 12 SOP shots. FREE and ON THE PHONE:
+   synthetic stand-in table (`engine/vehicles.py`), so nobody can type numbers that match their own photos. Then a **"before you start" checklist** (RC in hand, chassis
+   location, daylight in an open place, not at a workshop / petrol pump / parking, bonnet open, windows up), and the live
+   phone camera guides them through the shots in a real insurer's order: RC card and odometer from the driver's seat,
+   chassis and engine, then a walk around the car, then optional damage close-ups. Only the SOP's 12 shots decide; the
+   RC card and close-ups are for the reviewer. FREE and ON THE PHONE:
    a car detector (COCO-SSD, TensorFlow.js) says "car detected" and auto-captures when the car fills the frame;
    OCR (Tesseract.js) reads the number plate (front/rear) and chassis number, which the server compares with the RC record;
    dark / blurry photos get "retake" at once. The backend's SOP engine then decides: missing / dark / blurry photos,
@@ -30,6 +34,14 @@ same checks. Credits and every edit: `web/public/demo-photos/CREDITS.md`. Tested
 
 This proves the flow and the rules, NOT real-world accuracy: the photos are not all of one car, and the plate is a clean
 synthetic one. The odometer photo (a night dashboard) still gets a "too dark" warning; the dark threshold is uncalibrated.
+
+## Anti-cheat (our rules, not the SOP's)
+- A photo FILE made before the inspection started (e.g. an old gallery photo) is refused on the phone.
+- Any photo from a file instead of the live camera, photos spread over more than 30 minutes (first attempt), or a
+  damage close-up from the customer: the result goes to a reviewer instead of passing automatically.
+- Limits, said honestly: photo times come from the phone and file times can be edited, so this stops casual reuse,
+  not a determined cheater. A real insurer (we studied a public demo video of one) records ONE continuous video from
+  the driver's seat round the car; that is stronger and is on our "later" list.
 
 ## How it works
 - `engine/vision.py` - the eyes: sends all photos in ONE request to a vision model (swappable: `VISION_PROVIDER` =

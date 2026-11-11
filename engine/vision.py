@@ -40,6 +40,40 @@ SHOTS = [
     ("ENGINE_BAY", "Engine bay with the bonnet open"),
 ]
 SHOT_CODES = [c for c, _ in SHOTS]
+
+# The order and tips the CUSTOMER app uses (11 Nov, after studying a real insurer's self-inspection demo):
+# documents and the inside first (sitting in the driver's seat), then chassis and engine with the bonnet open, then
+# close the bonnet and walk around the car. Two kinds of extra photos are NOT part of the SOP's 12 shots and never
+# change the AI decision; they are for the reviewer: the RC card (required by the app) and up to 3 optional damage
+# close-ups. Tips are what the customer reads; "what" (above) is what the photo must show.
+_TIP_WALK = "Walk around the car. Don't zoom: step closer or farther instead."
+CAPTURE = [
+    {"code": "RC_CARD", "what": "Your RC (registration certificate) card, front side, all text readable",
+     "tip": "Hold it flat in daylight so it fills most of the frame.", "required": True, "sop": False},
+    {"code": "ODOMETER", "tip": "Sit in the driver's seat with the engine on. Show the TOTAL kilometres "
+     "(odometer), not the trip meter: a trip reading means a retake."},
+    {"code": "CHASSIS_NUMBER", "tip": "It is ENGRAVED in the metal: usually under the bonnet near the windscreen, "
+     "or on a metal plate at the driver or passenger door pillar. Not the sticker on the windscreen. "
+     "Don't zoom: move closer."},
+    {"code": "ENGINE_BAY", "tip": "Then close the bonnet for the outside photos."},
+    {"code": "FRONT", "tip": "Stand about 3 metres in front so the whole car and the number plate are in the frame."},
+    {"code": "FRONT_LEFT_45", "tip": _TIP_WALK},
+    {"code": "LEFT_SIDE", "tip": _TIP_WALK},
+    {"code": "REAR_LEFT_45", "tip": _TIP_WALK},
+    {"code": "REAR", "tip": "Make sure the rear number plate is sharp and readable."},
+    {"code": "REAR_RIGHT_45", "tip": _TIP_WALK},
+    {"code": "RIGHT_SIDE", "tip": _TIP_WALK},
+    {"code": "FRONT_RIGHT_45", "tip": _TIP_WALK},
+    {"code": "ROOF_AND_GLASS", "tip": "Hold the phone up high to show the roof and the windscreen."},
+] + [{"code": f"DAMAGE_CLOSEUP_{i}", "what": "Close-up of a scratch, dent or crack (optional)",
+      "tip": "Only if your car has damage: move close, don't zoom. Skip if there is none.",
+      "required": False, "sop": False} for i in (1, 2, 3)]
+for _c in CAPTURE:
+    _c.setdefault("what", dict(SHOTS).get(_c["code"], ""))
+    _c.setdefault("required", True)
+    _c.setdefault("sop", True)
+CAPTURE_CODES = [c["code"] for c in CAPTURE]
+assert sorted(c["code"] for c in CAPTURE if c["sop"]) == sorted(SHOT_CODES)   # all 12 SOP shots, each once
 PANELS = ["FRONT_BUMPER", "REAR_BUMPER", "BONNET", "ROOF", "WINDSHIELD", "BOOT_TAILGATE", "HEADLAMPS", "TAIL_LAMPS",
           "LEFT_FRONT_DOOR", "LEFT_REAR_DOOR", "RIGHT_FRONT_DOOR", "RIGHT_REAR_DOOR", "OTHER"]
 KINDS = ["SCRATCH", "DENT", "CRACK", "BROKEN", "MISSING", "PAINT_MISMATCH"]
