@@ -29,8 +29,8 @@ Overall: about 30% done (core logic built and tested; app, deployment and real-v
 ## To do before Check-in 2 (Thu 12 Nov)
 | Item | Owner | Status |
 |---|---|---|
-| One-page note | | Not started |
-| Fix Check-in 1 deck (team name, 3,180 wording) | | Not started |
+| One-page note | Kasim | Done 11 Nov: https://claude.ai/artifact/5VizMCTPruUZPg4SfDDjGJ (private until shared; export to PDF from the doc if a file is needed) |
+| Fix Check-in 1 deck (team name, 3,180 wording) | Kasim | Done 11 Nov: cover says "Team 3"; proof slide now says "tune on the other 3,180, test only on the 420" |
 
 ## To do before the auction (16 and 18 Nov)
 | Item | Owner | Status |
